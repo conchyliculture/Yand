@@ -17,10 +17,9 @@ class YandCli:
         self.parser = argparse.ArgumentParser()
 
         self.parser.add_argument('-r', '--read', action='store_true', help='read NAND')
+        self.parser.add_argument('-w', '--write', action='store_true', help='write NAND')
         self.parser.add_argument(
-            '-s', '--source', choices=['ftdi'], action='store', help='where to read from')
-        self.parser.add_argument(
-            '-o', '--output', action='store', help='Destination file')
+            '-f', '--file', action='store', help='file to write to, or read from')
 
         args = self.parser.parse_args()
         return args
@@ -29,19 +28,17 @@ class YandCli:
         """TODO"""
         options = self.ParseArguments()
 
-        source = None
-
-        if options.source == 'ftdi':
-            source = device.NAND()
-            source.Setup()
-            print(source.GetInfos())
+        ftdi_nand = device.NAND()
+        if not ftdi_nand:
+            self.parser.print_help()
+            raise errors.YandException('Need a source to read from')
+        ftdi_nand.Setup()
+        print(ftdi_nand.GetInfos())
 
         if options.read:
-            if not source:
-                self.parser.print_help()
-                raise errors.YandException('Need a source to read from')
-            source.Dump(destination=options.output)
-
+            ftdi_nand.DumpFlashToFile(options.file)
+        elif options.write:
+            ftdi_nand.WriteFileToFlash(options.file)
 
 
 if __name__ == "__main__":

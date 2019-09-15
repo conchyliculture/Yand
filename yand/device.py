@@ -1,4 +1,5 @@
-"""TODO"""
+"""Module for a NAND device"""
+import os
 from pyftdi import ftdi
 from tqdm import tqdm
 
@@ -6,16 +7,20 @@ from yand import errors
 
 
 class NAND:
-    """TODO"""
+    """Class to operate on a NAND"""
 
     DEFAULT_USB_VENDOR = 0x0403
     DEFAULT_USB_DEVICEID = 0x6010
     DEFAULT_INTERFACE_NUMBER = 1 # starts at 1
 
     NAND_CMD_READ0 = 0x00
+    NAND_CMD_PROG_PAGE_START = 0x10
     NAND_CMD_READSTART = 0x30
+    NAND_CMD_ERASE = 0x60
+    NAND_CMD_PROG_PAGE = 0x80
     NAND_CMD_READID = 0x90
     NAND_CMD_READ_PARAM_PAGE = 0xEC
+    NAND_CMD_ERASE_START = 0xD0
 
     NAND_ADDR_ID = 0x00
     NAND_ADDR_ONFI = 0x20
@@ -23,7 +28,7 @@ class NAND:
     NAND_SIZE_ONFI = 0x100
 
     def __init__(self):
-        """TODO"""
+        """Initializes a NAND object"""
         self.ftdi_device = None
 
         # NAND geometry / config
@@ -140,11 +145,11 @@ Device Size: {6:d}GiB
         self.address_cycles = (addr_cycles & 0x0f) + ((addr_cycles & 0xf0) >> 4)
 
     def Setup(self):
-        """TODO"""
+        """Sets the underlying IO and flash characteristics"""
         self._SetupFtdi()
         self._SetupFlash()
 
-    def Dump(self, destination=None):
+    def DumpFlashToFile(self, destination):
         """Reads all pages from the flash, and writes it to a file.
 
         Args:
@@ -156,7 +161,7 @@ Device Size: {6:d}GiB
             total=self.GetTotalSize(),
             unit_scale=True,
             unit_divisor=1024,
-            unit = 'B'
+            unit='B'
         )
         with open(destination, 'wb') as dest_file:
             for page in range(self.GetTotalPages()):
@@ -260,3 +265,72 @@ Device Size: {6:d}GiB
 
         data = self.ftdi_device.read_data(size)
         return data
+
+    def EraseBlockByPage(self, page_number):
+        """Erase the block containing a page.
+
+        Args:
+            page_number(int): the number of the page where we will erase the block.
+        """
+        block_address = page_number >> 8
+        self.write_protect = False
+        self.SendCommand(self.NAND_CMD_ERASE)
+        self.SendAddress(block_address, 3) # Is 3 always the case?
+        self.SendCommand(self.NAND_CMD_ERASE_START)
+        self.WaitReady()
+        self.write_protect = True
+
+    def WritePage(self, page_number, data):
+        """Writes a page to the NAND
+
+        Args:
+            page_number(int): the number of the page.
+            data(bytearry): the data to program.
+        """
+        if not len(data) == self.page_size:
+            raise errors.YandException(
+                'Trying to write data that is different than page_size: {0:d} != {1:d}'.format(
+                    len(data), self.page_size))
+        self.write_protect = False
+
+        page_address = page_number << 8
+
+        self.SendCommand(self.NAND_CMD_PROG_PAGE)
+        self.WaitReady()
+        self.SendAddress(page_address, self.address_cycles)
+        self.WaitReady()
+        self._DeviceWrite(data)
+        self.SendCommand(self.NAND_CMD_PROG_PAGE_START)
+        self.WaitReady()
+
+        self.write_protect = True
+
+    def WriteFileToFlash(self, filename):
+        """Overwrite file to Nand.
+
+        Args:
+            filename(str): path to the dump to write.
+        """
+        filesize = os.stat(filename).st_size
+        if filesize > self.GetTotalSize():
+            raise errors.YandException(
+                'Input file is {0:d} bytes which is more than the current nand ({1:d})'.format(
+                    filesize, self.GetTotalSize()))
+        if filesize < self.GetTotalSize():
+            print('WARNING: input file is {0:d} which is smaller than the current nand ({1:d})')
+
+
+        bar = tqdm(
+            total=self.GetTotalSize(),
+            unit_scale=True,
+            unit_divisor=1024,
+            unit='B'
+        )
+        with open(filename, 'rb') as input_file:
+
+            for page_number in range(self.GetTotalPages()):
+                if page_number % self.pages_per_block == 0:
+                    self.EraseBlockByPage(page_number)
+                page_data = input_file.read(self.page_size)
+                self.WritePage(page_number, page_data)
+                bar.update(self.page_size)
