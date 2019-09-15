@@ -41,6 +41,7 @@ class YandTest(unittest.TestCase):
         self.assertEqual(nand.address_cycles, 5)
 
         self.assertEqual(nand.GetTotalPages(), 1048576)
+        self.assertEqual(nand.GetTotalSize(), 4529848320)
 
 
 if __name__ == "__main__":
