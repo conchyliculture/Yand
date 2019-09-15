@@ -4,6 +4,9 @@ This was heavily inspired from [https://github.com/ohjeongwook/DumpFlash](https:
 
 YAND aims at making it easy to copy all data from a NAND flash into a file, or the other way around.
 
+The Hardware used is the same as that project. More information regarding the Nand dumping process at:
+[https://www.blackhat.com/docs/us-14/materials/us-14-Oh-Reverse-Engineering-Flash-Memory-For-Fun-And-Benefit-WP.pdf](https://www.blackhat.com/docs/us-14/materials/us-14-Oh-Reverse-Engineering-Flash-Memory-For-Fun-And-Benefit-WP.pdf)
+
 ## Installation
 
 ```
