@@ -199,7 +199,7 @@ Device Size: {6:d}GiB
         Returns:
             bytearray: the content of the page.
         """
-        page_address = page_number << 8
+        page_address = page_number << 16 # why?
         # Send READ PAGE command
         self.SendCommand(self.NAND_CMD_READ0)
         self.SendAddress(page_address, self.address_cycles)
