@@ -71,7 +71,7 @@ Device Size: {6:d}GiB
             self.ftdi_device.open(
                 self.DEFAULT_USB_VENDOR,
                 self.DEFAULT_USB_DEVICEID,
-                self.DEFAULT_INTERFACE_NUMBER)
+                interface=self.DEFAULT_INTERFACE_NUMBER)
         except OSError as e:
             raise errors.YandException('Could not open FTDI device')
 
