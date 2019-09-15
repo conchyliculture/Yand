@@ -14,6 +14,7 @@ class FtdiDevice:
     def __init__(self):
         """Initializes a FtdiDevice object"""
         self.ftdi = None
+        self.write_protect = True
 
     def Setup(self):
         """Sets up the FTDI device."""
@@ -71,7 +72,7 @@ class FtdiDevice:
         cmds = [ftdi.Ftdi.WRITE_EXTENDED, cmd_type, 0, data[0]]
         for i in range(len(data)-1):
             cmds += [ftdi.Ftdi.WRITE_SHORT, 0, data[i+1]]
-        self.ftdi_device.write_data(bytearray(cmds))
+        self.ftdi.write_data(bytearray(cmds))
 
     def Read(self, size):
         """Reads a set of bytes from the device.
@@ -86,7 +87,7 @@ class FtdiDevice:
             cmds += [ftdi.Ftdi.READ_SHORT, 0]
         cmds.append(ftdi.Ftdi.SEND_IMMEDIATE)
 
-        self.ftdi_device.write_data(cmds)
+        self.ftdi.write_data(cmds)
 
-        data = self.ftdi_device.read_data(size)
+        data = self.ftdi.read_data(size)
         return data

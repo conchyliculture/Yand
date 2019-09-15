@@ -37,8 +37,6 @@ class NandInterface:
         self.page_size = None
         self.pages_per_block = None
 
-        self.write_protect = True
-
     def GetTotalSize(self):
         """Returns the total size of the flash, in bytes"""
         return self.page_size * self.pages_per_block * self.number_of_blocks
@@ -191,12 +189,12 @@ Device Size: {6:d}GiB
             page_number(int): the number of the page where we will erase the block.
         """
         block_address = page_number >> 8
-        self.write_protect = False
+        self.ftdi_device.write_protect = False
         self.SendCommand(self.NAND_CMD_ERASE)
         self.SendAddress(block_address, 3) # Is 3 always the case?
         self.SendCommand(self.NAND_CMD_ERASE_START)
         self.ftdi_device.WaitReady()
-        self.write_protect = True
+        self.ftdi_device.write_protect = True
 
     def WritePage(self, page_number, data):
         """Writes a page to the NAND Flash
@@ -211,7 +209,7 @@ Device Size: {6:d}GiB
             raise errors.YandException(
                 'Trying to write data that is different than page_size: {0:d} != {1:d}'.format(
                     len(data), self.page_size))
-        self.write_protect = False
+        self.ftdi_device.write_protect = False
 
         page_address = page_number << 8
 
@@ -223,7 +221,7 @@ Device Size: {6:d}GiB
         self.SendCommand(self.NAND_CMD_PROG_PAGE_START)
         self.ftdi_device.WaitReady()
 
-        self.write_protect = True
+        self.ftdi_device.write_protect = True
 
     def WriteFileToFlash(self, filename):
         """Overwrite file to NAND Flash.
