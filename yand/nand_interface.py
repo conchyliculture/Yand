@@ -1,17 +1,13 @@
-"""Module for a NAND device"""
+"""Module to talk to a NAND"""
 import os
-from pyftdi import ftdi
 from tqdm import tqdm
 
 from yand import errors
+from yand import ftdi_device
 
 
-class NAND:
-    """Class to operate on a NAND"""
-
-    DEFAULT_USB_VENDOR = 0x0403
-    DEFAULT_USB_DEVICEID = 0x6010
-    DEFAULT_INTERFACE_NUMBER = 1 # starts at 1
+class NandInterface:
+    """Class to operate on a NAND Flash"""
 
     NAND_CMD_READ0 = 0x00
     NAND_CMD_PROG_PAGE_START = 0x10
@@ -28,10 +24,10 @@ class NAND:
     NAND_SIZE_ONFI = 0x100
 
     def __init__(self):
-        """Initializes a NAND object"""
+        """Initializes a NandInterface object"""
         self.ftdi_device = None
 
-        # NAND geometry / config
+        # Flash geometry / config
         self.address_cycles = None
         self.device_manufacturer = None
         self.device_model = None
@@ -52,7 +48,7 @@ class NAND:
         return self.number_of_blocks * self.pages_per_block
 
     def GetInfos(self):
-        """Returns a string showing NAND info"""
+        """Returns a string showing Flash info"""
         return """Chip model & Manufacturer: {0:s} ({1:s})
 Page Size : {2:d} ({3:d} + {4:d})
 Blocks number : {5:d}
@@ -64,42 +60,23 @@ Device Size: {6:d}GiB
             int(self.GetTotalSize() / 1024 / 1024 / 1024)
         )
 
-    def _SetupFtdi(self):
-        """Sets up the FTDI device."""
-        self.ftdi_device = ftdi.Ftdi()
-        try:
-            self.ftdi_device.open(
-                self.DEFAULT_USB_VENDOR,
-                self.DEFAULT_USB_DEVICEID,
-                interface=self.DEFAULT_INTERFACE_NUMBER)
-        except OSError:
-            raise errors.YandException(
-                'Could not open FTDI device\n'
-                'Check USB connections')
-
-        self.ftdi_device.set_bitmode(0, ftdi.Ftdi.BITMODE_MCU)
-        self.ftdi_device.write_data(bytearray([ftdi.Ftdi.DISABLE_CLK_DIV5]))
-        self.ftdi_device.purge_buffers()
-        self.ftdi_device.write_data(bytearray([ftdi.Ftdi.SET_BITS_HIGH, 0x0, 0x1]))
-        self.WaitReady()
-
     def _SetupFlash(self):
         """Setup the flash configuration."""
 
         # First we check if we can gather information form ONFI
         self.SendCommand(self.NAND_CMD_READID)
         self.SendAddress(self.NAND_ADDR_ONFI)
-        onfi_result = self.ReadFlashData(4)
+        onfi_result = self.ftdi_device.Read(4)
 
         if onfi_result == b'ONFI':
             self.SendCommand(self.NAND_CMD_READ_PARAM_PAGE)
             self.SendAddress(self.NAND_ADDR_ID)
-            self.WaitReady()
-            onfi_data = self.ReadFlashData(self.NAND_SIZE_ONFI)
+            self.ftdi_device.WaitReady()
+            onfi_data = self.ftdi_device.Read(self.NAND_SIZE_ONFI)
             self._ParseONFIData(onfi_data)
         else:
             raise errors.YandException(
-                'Warning: Could not read ONFI info. Will try to guess your NAND geometry. '
+                'Warning: Could not read ONFI info.'
                 'Flash returned {0!s}'.format(onfi_result))
 
     def _ParseONFIData(self, onfi_data):
@@ -146,7 +123,10 @@ Device Size: {6:d}GiB
 
     def Setup(self):
         """Sets the underlying IO and flash characteristics"""
-        self._SetupFtdi()
+        if not self.ftdi_device:
+            self.ftdi_device = ftdi_device.FtdiDevice()
+            self.ftdi_device.Setup()
+
         self._SetupFlash()
 
     def DumpFlashToFile(self, destination):
@@ -171,26 +151,13 @@ Device Size: {6:d}GiB
                 progress_bar.update(self.page_size)
 
     def SendCommand(self, command):
-        """Sends a command address to the NAND.
+        """Sends a command address to the Flash.
 
         Args:
             command(int): the command to send.
         """
-        self._DeviceWrite(bytearray([command]), command=True)
+        self.ftdi_device.Write(bytearray([command]), command=True)
 
-    def WaitReady(self):
-        """Waits for the device to be ready.
-
-        Raises:
-            errors.YandException: if the device is not ready.
-        """
-        while 1:
-            self.ftdi_device.write_data(bytearray([ftdi.Ftdi.GET_BITS_HIGH]))
-            data = self.ftdi_device.read_data_bytes(1)
-            if not data:
-                raise errors.YandException('FTDI device not responding. Try restarting it.')
-            if data[0]&2 == 0x2:
-                break
 
     def ReadPage(self, page_number):
         """Returns the content of a page.
@@ -204,72 +171,18 @@ Device Size: {6:d}GiB
         self.SendCommand(self.NAND_CMD_READ0)
         self.SendAddress(page_address, self.address_cycles)
         self.SendCommand(self.NAND_CMD_READSTART)
-        bytes_to_read = self.ReadFlashData(self.page_size)
+        bytes_to_read = self.ftdi_device.Read(self.page_size)
         return bytes_to_read
 
-    def ReadFlashData(self, size):
-        """Reads the output of the NAND.
-
-        Args:
-            size(int): the number of bytes to read.
-        Returns:
-            bytearray: the data.
-        """
-        return self._DeviceRead(size)
-
-
     def SendAddress(self, address, size=1):
-        """Writes an address to the NAND.
+        """Writes an address to the NAND Flash.
 
         Args:
             address(int): the address to set.
             size(int): the number LSB to send (ie: "address cycles").
         """
         data = (address).to_bytes(8, byteorder='little')
-        self._DeviceWrite(data[0:size], address=True)
-
-    def _DeviceWrite(self, data, command=False, address=False):
-        """Write a set of bytes to the device.
-
-        Args:
-            data(bytearray): the data to write.
-            command(bool): if it is a command.
-            address(bool): if it is an address.
-        Raises:
-            errors.YandException: if both command & address types are set.
-        """
-        cmd_type = 0
-        if command and address:
-            raise errors.YandException('Can\'t set command and address latch simultaneously')
-        if command:
-            cmd_type |= 0x40
-        elif address:
-            cmd_type |= 0x80
-        if not self.write_protect:
-            cmd_type |= 0x20
-
-        cmds = [ftdi.Ftdi.WRITE_EXTENDED, cmd_type, 0, data[0]]
-        for i in range(len(data)-1):
-            cmds += [ftdi.Ftdi.WRITE_SHORT, 0, data[i+1]]
-        self.ftdi_device.write_data(bytearray(cmds))
-
-    def _DeviceRead(self, size):
-        """Reads a set of bytes from the device.
-
-        Args:
-            size(int): the amount of bytes to read.
-        Returns:
-            bytearray: the data.
-        """
-        cmds = [ftdi.Ftdi.READ_EXTENDED, 0, 0]
-        for _ in range(size-1):
-            cmds += [ftdi.Ftdi.READ_SHORT, 0]
-        cmds.append(ftdi.Ftdi.SEND_IMMEDIATE)
-
-        self.ftdi_device.write_data(cmds)
-
-        data = self.ftdi_device.read_data(size)
-        return data
+        self.ftdi_device.Write(data[0:size], address=True)
 
     def EraseBlockByPage(self, page_number):
         """Erase the block containing a page.
@@ -282,11 +195,11 @@ Device Size: {6:d}GiB
         self.SendCommand(self.NAND_CMD_ERASE)
         self.SendAddress(block_address, 3) # Is 3 always the case?
         self.SendCommand(self.NAND_CMD_ERASE_START)
-        self.WaitReady()
+        self.ftdi_device.WaitReady()
         self.write_protect = True
 
     def WritePage(self, page_number, data):
-        """Writes a page to the NAND
+        """Writes a page to the NAND Flash
 
         Args:
             page_number(int): the number of the page.
@@ -303,30 +216,31 @@ Device Size: {6:d}GiB
         page_address = page_number << 8
 
         self.SendCommand(self.NAND_CMD_PROG_PAGE)
-        self.WaitReady()
+        self.ftdi_device.WaitReady()
         self.SendAddress(page_address, self.address_cycles)
-        self.WaitReady()
-        self._DeviceWrite(data)
+        self.ftdi_device.WaitReady()
+        self.ftdi_device.Write(data)
         self.SendCommand(self.NAND_CMD_PROG_PAGE_START)
-        self.WaitReady()
+        self.ftdi_device.WaitReady()
 
         self.write_protect = True
 
     def WriteFileToFlash(self, filename):
-        """Overwrite file to Nand.
+        """Overwrite file to NAND Flash.
 
         Args:
             filename(str): path to the dump to write.
         Raises:
-            errors.YandException: if filename has more data than the NAND.
+            errors.YandException: if filename has more data than the NAND Flash.
         """
         filesize = os.stat(filename).st_size
         if filesize > self.GetTotalSize():
             raise errors.YandException(
-                'Input file is {0:d} bytes which is more than the current nand ({1:d})'.format(
+                'Input file is {0:d} bytes, more than the current NAND Flash size ({1:d})'.format(
                     filesize, self.GetTotalSize()))
         if filesize < self.GetTotalSize():
-            print('WARNING: input file is {0:d} which is smaller than the current nand ({1:d})')
+            print('input file is {0:d}, less than the current NAND Flash size ({1:d})'.format(
+                filesize, self.GetTotalSize()))
 
         progress_bar = tqdm(
             total=self.GetTotalSize(),
