@@ -72,8 +72,10 @@ Device Size: {6:d}GiB
                 self.DEFAULT_USB_VENDOR,
                 self.DEFAULT_USB_DEVICEID,
                 interface=self.DEFAULT_INTERFACE_NUMBER)
-        except OSError as e:
-            raise errors.YandException('Could not open FTDI device')
+        except OSError:
+            raise errors.YandException(
+                'Could not open FTDI device\n'
+                'Check USB connections')
 
         self.ftdi_device.set_bitmode(0, ftdi.Ftdi.BITMODE_MCU)
         self.ftdi_device.write_data(bytearray([ftdi.Ftdi.DISABLE_CLK_DIV5]))
@@ -152,10 +154,12 @@ Device Size: {6:d}GiB
 
         Args:
             destination(str): the destination file.
+        Raises:
+            errors.YandException: if no destination file is provided.
         """
         if not destination:
             raise errors.YandException('Please specify where to write')
-        bar = tqdm(
+        progress_bar = tqdm(
             total=self.GetTotalSize(),
             unit_scale=True,
             unit_divisor=1024,
@@ -164,7 +168,7 @@ Device Size: {6:d}GiB
         with open(destination, 'wb') as dest_file:
             for page in range(self.GetTotalPages()):
                 dest_file.write(self.ReadPage(page))
-                bar.update(self.page_size)
+                progress_bar.update(self.page_size)
 
     def SendCommand(self, command):
         """Sends a command address to the NAND.
@@ -184,7 +188,7 @@ Device Size: {6:d}GiB
             self.ftdi_device.write_data(bytearray([ftdi.Ftdi.GET_BITS_HIGH]))
             data = self.ftdi_device.read_data_bytes(1)
             if not data:
-                raise Exception('FTDI device not responding. Try restarting it.')
+                raise errors.YandException('FTDI device not responding. Try restarting it.')
             if data[0]&2 == 0x2:
                 break
 
@@ -196,8 +200,7 @@ Device Size: {6:d}GiB
         Returns:
             bytearray: the content of the page.
         """
-        page_address = page_number << 16 # why?
-        # Send READ PAGE command
+        page_address = page_number << 16
         self.SendCommand(self.NAND_CMD_READ0)
         self.SendAddress(page_address, self.address_cycles)
         self.SendCommand(self.NAND_CMD_READSTART)
@@ -232,10 +235,12 @@ Device Size: {6:d}GiB
             data(bytearray): the data to write.
             command(bool): if it is a command.
             address(bool): if it is an address.
+        Raises:
+            errors.YandException: if both command & address types are set.
         """
         cmd_type = 0
         if command and address:
-            raise errors.YandException('cant set command and address latch simultaneously')
+            raise errors.YandException('Can\'t set command and address latch simultaneously')
         if command:
             cmd_type |= 0x40
         elif address:
@@ -286,6 +291,8 @@ Device Size: {6:d}GiB
         Args:
             page_number(int): the number of the page.
             data(bytearry): the data to program.
+        Raises:
+            errors.YandException: if trying to write more data than a block length.
         """
         if not len(data) == self.page_size:
             raise errors.YandException(
@@ -310,6 +317,8 @@ Device Size: {6:d}GiB
 
         Args:
             filename(str): path to the dump to write.
+        Raises:
+            errors.YandException: if filename has more data than the NAND.
         """
         filesize = os.stat(filename).st_size
         if filesize > self.GetTotalSize():
@@ -319,8 +328,7 @@ Device Size: {6:d}GiB
         if filesize < self.GetTotalSize():
             print('WARNING: input file is {0:d} which is smaller than the current nand ({1:d})')
 
-
-        bar = tqdm(
+        progress_bar = tqdm(
             total=self.GetTotalSize(),
             unit_scale=True,
             unit_divisor=1024,
@@ -333,4 +341,4 @@ Device Size: {6:d}GiB
                     self.EraseBlockByPage(page_number)
                 page_data = input_file.read(self.page_size)
                 self.WritePage(page_number, page_data)
-                bar.update(self.page_size)
+                progress_bar.update(self.page_size)
