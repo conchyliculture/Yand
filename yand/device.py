@@ -1,5 +1,6 @@
 """TODO"""
 from pyftdi import ftdi
+from tqdm import tqdm
 
 from yand import errors
 
@@ -151,9 +152,16 @@ Device Size: {6:d}GiB
         """
         if not destination:
             raise errors.YandException('Please specify where to write')
+        bar = tqdm(
+            total=self.GetTotalSize(),
+            unit_scale=True,
+            unit_divisor=1024,
+            unit = 'B'
+        )
         with open(destination, 'wb') as dest_file:
             for page in range(self.GetTotalPages()):
                 dest_file.write(self.ReadPage(page))
+                bar.update(self.page_size)
 
     def SendCommand(self, command):
         """Sends a command address to the NAND.
