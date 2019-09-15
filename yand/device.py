@@ -27,23 +27,19 @@ class NAND:
 
         # NAND geometry / config
         self.address_cycles = None
-        self.block_size = None
         self.device_manufacturer = None
         self.device_model = None
         self.manufacturer_id = None
+        self.number_of_blocks = None
         self.oob_size = None
         self.page_size = None
         self.pages_per_block = None
 
         self.write_protect = True
 
-    def GetTotalSize(self, with_oob=True):
-        """TODO"""
-        page_size = self.page_size
-        if not with_oob:
-            page_size -= self.oob_size
-
-        return page_size * self.pages_per_block * self.number_of_blocks
+    def GetTotalSize(self):
+        """Returns the total size of the flash, in bytes"""
+        return self.page_size * self.pages_per_block * self.number_of_blocks
 
     def GetTotalPages(self):
         """Returns the number of pages of the Flash."""
@@ -97,14 +93,15 @@ Device Size: {6:d}GiB
             onfi_data = self.ReadFlashData(self.NAND_SIZE_ONFI)
             self._ParseONFIData(onfi_data)
         else:
-            raise errors.YandException('Could not read ONFI info. Please provide your NAND geometry.')
+            raise errors.YandException(
+                'Could not read ONFI info. Please provide your NAND geometry.')
 
     def _ParseONFIData(self, onfi_data):
         """Parses a ONFI data block."""
         # Check ONFI magic
         if onfi_data[0:4] != bytearray([0x4F, 0x4E, 0x46, 0x49]):
             raise errors.YandException('ONFI data block does not start with \'ONFI\'')
-        
+
         # Parses ONFI version support
         _ = onfi_data[4:6]
         # Parses features support
@@ -147,7 +144,11 @@ Device Size: {6:d}GiB
         self._SetupFlash()
 
     def Dump(self, destination=None):
-        """TODO"""
+        """Reads all pages from the flash, and writes it to a file.
+
+        Args:
+            destination(str): the destination file.
+        """
         if not destination:
             raise errors.YandException('Please specify where to write')
         with open(destination, 'wb') as dest_file:
@@ -184,7 +185,7 @@ Device Size: {6:d}GiB
         Returns:
             bytearray: the content of the page.
         """
-        page_address = page_number # LOL 
+        page_address = page_number << 8
         # Send READ PAGE command
         self.SendCommand(self.NAND_CMD_READ0)
         self.SendAddress(page_address, self.address_cycles)
