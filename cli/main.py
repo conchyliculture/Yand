@@ -20,7 +20,7 @@ class YandCli:
         self.parser.add_argument(
             '-s', '--source', choices=['ftdi'], action='store', help='where to read from')
         self.parser.add_argument(
-            '-w', '--write', action='store', help='Destination file')
+            '-o', '--output', action='store', help='Destination file')
 
         args = self.parser.parse_args()
         return args
@@ -40,7 +40,7 @@ class YandCli:
             if not source:
                 self.parser.print_help()
                 raise errors.YandException('Need a source to read from')
-            source.Dump(destination=options.write)
+            source.Dump(destination=options.output)
 
 
 
