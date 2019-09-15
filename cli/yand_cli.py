@@ -1,6 +1,8 @@
 """TODO"""
 import argparse
 
+from yand import __version__
+
 from yand import device
 from yand import errors
 
