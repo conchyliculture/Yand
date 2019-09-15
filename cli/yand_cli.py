@@ -31,9 +31,11 @@ class YandCli:
         options = self.ParseArguments()
 
         ftdi_nand = device.NAND()
+
         if not ftdi_nand:
             self.parser.print_help()
             raise errors.YandException('Need a source to read from')
+
         ftdi_nand.Setup()
         print(ftdi_nand.GetInfos())
 

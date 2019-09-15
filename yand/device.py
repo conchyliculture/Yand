@@ -90,9 +90,9 @@ Device Size: {6:d}GiB
         # First we check if we can gather information form ONFI
         self.SendCommand(self.NAND_CMD_READID)
         self.SendAddress(self.NAND_ADDR_ONFI)
-        onfi_available = ([0x4F, 0x4E, 0x46, 0x49] == self.ReadPage(4)) # ['O', 'N', 'F', 'I']
+        onfi_result = self.ReadFlashData(4)
 
-        if onfi_available:
+        if onfi_result == b'ONFI':
             self.SendCommand(self.NAND_CMD_READ_PARAM_PAGE)
             self.SendAddress(self.NAND_ADDR_ID)
             self.WaitReady()
@@ -100,7 +100,8 @@ Device Size: {6:d}GiB
             self._ParseONFIData(onfi_data)
         else:
             raise errors.YandException(
-                'Could not read ONFI info. Please provide your NAND geometry.')
+                'Warning: Could not read ONFI info. Will try to guess your NAND geometry. '
+                'Flash returned {0!s}'.format(onfi_result))
 
     def _ParseONFIData(self, onfi_data):
         """Parses a ONFI data block."""
@@ -231,9 +232,9 @@ Device Size: {6:d}GiB
         """Write a set of bytes to the device.
 
         Args:
+            data(bytearray): the data to write.
             command(bool): if it is a command.
             address(bool): if it is an address.
-            data(bytearray): the data to write.
         """
         cmd_type = 0
         if command and address:
@@ -246,7 +247,7 @@ Device Size: {6:d}GiB
             cmd_type |= 0x20
 
         cmds = [ftdi.Ftdi.WRITE_EXTENDED, cmd_type, 0, data[0]]
-        for i in range(len(data)):
+        for i in range(len(data)-1):
             cmds += [ftdi.Ftdi.WRITE_SHORT, 0, data[i+1]]
         self.ftdi_device.write_data(bytearray(cmds))
 
@@ -259,9 +260,11 @@ Device Size: {6:d}GiB
             bytearray: the data.
         """
         cmds = [ftdi.Ftdi.READ_EXTENDED, 0, 0]
-        for _ in range(size):
+        for _ in range(size-1):
             cmds += [ftdi.Ftdi.READ_SHORT, 0]
         cmds.append(ftdi.Ftdi.SEND_IMMEDIATE)
+
+        self.ftdi_device.write_data(cmds)
 
         data = self.ftdi_device.read_data(size)
         return data
