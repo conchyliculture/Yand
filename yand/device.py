@@ -77,9 +77,6 @@ Device Size: {6:d}GiB
 
         self.ftdi_device.set_bitmode(0, ftdi.Ftdi.BITMODE_MCU)
         self.ftdi_device.write_data(bytearray([ftdi.Ftdi.DISABLE_CLK_DIV5]))
-        # For 'slower mode':
-        #self.ftdi_device.write_data(bytearray([ftdi.Ftdi.ENABLE_CLK_DIV5]))
-        self.ftdi_device.set_latency_timer(ftdi.Ftdi.LATENCY_MIN)
         self.ftdi_device.purge_buffers()
         self.ftdi_device.write_data(bytearray([ftdi.Ftdi.SET_BITS_HIGH, 0x0, 0x1]))
         self.WaitReady()
