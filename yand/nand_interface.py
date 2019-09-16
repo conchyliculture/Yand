@@ -28,9 +28,9 @@ class NandInterface:
         self.ftdi_device = None
 
         # Flash geometry / config
-        self.address_cycles = None
-        self.device_manufacturer = None
-        self.device_model = None
+        self.address_cycles = 5
+        self.device_manufacturer = 'Unknown Manufacturer'
+        self.device_model = 'Unknown Model'
         self.manufacturer_id = None
         self.number_of_blocks = None
         self.oob_size = None
@@ -125,7 +125,8 @@ Device Size: {6:d}GiB
             self.ftdi_device = ftdi_device.FtdiDevice()
             self.ftdi_device.Setup()
 
-        self._SetupFlash()
+        if not (self.page_size and self.pages_per_block and self.number_of_blocks):
+            self._SetupFlash()
 
     def DumpFlashToFile(self, destination):
         """Reads all pages from the flash, and writes it to a file.
