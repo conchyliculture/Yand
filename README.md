@@ -1,5 +1,11 @@
 # YAND (Yet another NAND dumper)
 
+**WARNING, WRITING HASN'T BEEN TESTED YET**
+
+The script lets you read a whole NAND flash (user data & OOB) to a file, and restore a complete dump on a NAND Flash.
+
+It uses ft2232H to connect to a TSOP48. For the pinout & connections, refer to [this diagram](https://github.com/ohjeongwook/DumpFlash/blob/master/schematics.png).
+
 This was heavily inspired from [https://github.com/ohjeongwook/DumpFlash](https://github.com/ohjeongwook/DumpFlash).
 
 YAND aims at making it easy to copy all data from a NAND flash into a file, or the other way around.
