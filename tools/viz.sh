@@ -74,6 +74,10 @@ if [ ! -d "${TILES_DIR}" ] ; then
     fi
 fi
 
+echo "ALL DONE"
+echo
+echo "You might want to delete ${BIG_PNG}, it's not going to be used any more"
+echo
 echo "Starting webserver... Then open your web browser to http://localhost:8000"
 echo "Ctrl-C to quit"
 python3 "${HTTP_SERV}" -d "${TILES_DIR}" 
