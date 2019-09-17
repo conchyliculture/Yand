@@ -47,15 +47,19 @@ class NandInterface:
 
     def GetInfos(self):
         """Returns a string showing Flash info"""
+        size = self.GetTotalSize()
+        if size > 1024*1024*1024:
+            size = '{0:d}GiB'.format(int(size / (1024*1024*1024)))
+        elif size > 1024*1024:
+            size = '{0:d}MiB'.format(int(size / (1024*1024)))
         return """Chip model & Manufacturer: {0:s} ({1:s})
 Page Size : {2:d} ({3:d} + {4:d})
 Blocks number : {5:d}
-Device Size: {6:d}GiB
+Device Size: {6:d}
         """.format(
             self.device_model.strip(), self.device_manufacturer.strip(),
             self.page_size, (self.page_size - self.oob_size), self.oob_size,
-            self.number_of_blocks,
-            int(self.GetTotalSize() / 1024 / 1024 / 1024)
+            self.number_of_blocks, size
         )
 
     def _SetupFlash(self):
@@ -74,8 +78,8 @@ Device Size: {6:d}GiB
             self._ParseONFIData(onfi_data)
         else:
             raise errors.YandException(
-                'Warning: Could not read ONFI info.'
-                'Flash returned {0!s}'.format(onfi_result))
+                'Warning: Could not read ONFI info. Please provide geometry\n'
+                'Flash returned "{0:s}"'.format(onfi_result.hex()))
 
     def _ParseONFIData(self, onfi_data):
         """Parses a ONFI data block."""
