@@ -37,3 +37,38 @@ optional arguments:
   -f FILE, --file FILE  file to write to, or read from
 
 ```
+
+For a first detection of you NAND Flash, run the script with no option. This will attempt autodetection of the flash geometry with ONFI:
+```
+$ yand_cli.py
+Chip model & Manufacturer: MT29F32G08CBACAWP (MICRON)
+Page Size : 4320 (4096 + 224)
+Blocks number : 4096
+Device Size: 4GiB
+```
+
+then you can start dumping
+```
+$ yand_cli.py -r -f dump.bin
+<wait>
+```
+
+If the flash doesn't support ONFI, you'll have to find the geometry yourself. Use the chip serial number as well as the ID returned but the chip:
+```
+yand.errors.YandException: Warning: Could not read ONFI info. Please provide geometry
+Flash returned "98d384a5"
+```
+
+Refer to the device datasheet to do the proper calculations, then set the parameters:
+```
+yand_cli.py  -P 2048,64 -B 64 -K 65536
+Chip model & Manufacturer: Unknown Model (Unknown Manufacturer)
+Page Size : 2112 (2048 + 64)
+Blocks number : 65536
+Device Size: 8GiB
+```
+
+If this looks correct to you, start dumping:
+```
+yand_cli.py  -P 2048,64 -B 64 -K 65536 -r -f dump.bin
+```
