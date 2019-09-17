@@ -55,7 +55,7 @@ class NandInterface:
         return """Chip model & Manufacturer: {0:s} ({1:s})
 Page Size : {2:d} ({3:d} + {4:d})
 Blocks number : {5:d}
-Device Size: {6:d}
+Device Size: {6:s}
         """.format(
             self.device_model.strip(), self.device_manufacturer.strip(),
             self.page_size, (self.page_size - self.oob_size), self.oob_size,
