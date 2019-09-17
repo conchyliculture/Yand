@@ -2,7 +2,7 @@
 
 import unittest
 
-from yand import device
+from yand import nand_interface
 
 
 # pylint: disable=protected-access
@@ -35,7 +35,7 @@ class YandTest(unittest.TestCase):
             0x01,
             0x23,
         ])
-        nand = device.NAND()
+        nand = nand_interface.NandInterface()
         nand._ParseONFIData(fake_onfi)
         self.assertEqual(nand.device_manufacturer, 'MICRON      ')
         self.assertEqual(nand.device_model, 'MT29F32G08CBACAWP   ')
@@ -47,7 +47,3 @@ class YandTest(unittest.TestCase):
 
         self.assertEqual(nand.GetTotalPages(), 1048576)
         self.assertEqual(nand.GetTotalSize(), 4529848320)
-
-
-if __name__ == "__main__":
-    unittest.main()
