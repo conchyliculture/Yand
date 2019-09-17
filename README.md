@@ -72,3 +72,9 @@ If this looks correct to you, start dumping:
 ```
 yand_cli.py  -P 2048,64 -B 64 -K 65536 -r -f dump.bin
 ```
+
+## Visualization
+
+Go read the relevant [doc](TOOLS.md) to see your dump in a fancy JS zoom thing:
+
+![Demo](doc/giphy.gif)

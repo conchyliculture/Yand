@@ -5,3 +5,5 @@ dist
 *.egg-info
 *.bin
 *.pgm
+tools/bin2pgm
+pics
