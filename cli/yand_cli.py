@@ -27,7 +27,7 @@ class YandCli:
             '-f', '--file', action='store', help='File to write to, or read from')
 
         self.parser.add_argument(
-            '-P', '--pagesize', action='store',
+            '-P', '--page_size', action='store',
             help='Specify page size  & OOB size in bytes, ie: "2048,128"')
         self.parser.add_argument(
             '-B', '--pages_per_block', action='store', help='Specify the number of pages per block')
@@ -51,10 +51,12 @@ class YandCli:
             raise errors.YandException('Need a source to read from')
 
 
-        if options.pagesize:
+        if options.page_size:
             try:
-                ftdi_nand.page_size, ftdi_nand.oob_size = [
-                    int(opt) for opt in options.pagesize.split(',')]
+                page_size, oob_size = [
+                    int(opt) for opt in options.page_size.split(',')]
+                ftdi_nand.oob_size = oob_size
+                ftdi_nand.page_size = oob_size + page_size
             except ValueError:
                 raise errors.YandException(
                     'Please specify page size as such : "user_data,oob". For example: "2048,128"')
