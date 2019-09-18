@@ -10,6 +10,8 @@ This was heavily inspired from [https://github.com/ohjeongwook/DumpFlash](https:
 
 YAND aims at making it easy to copy all data from a NAND flash into a file, or the other way around.
 
+It is *NOT* going to do your homework trying to figure out NAND flash geometry. While it supports ONFI autodetection, if this isn't offered by your chip, you're on your own.
+
 The Hardware used is the same as that project. More information regarding the Nand dumping process at:
 [https://www.blackhat.com/docs/us-14/materials/us-14-Oh-Reverse-Engineering-Flash-Memory-For-Fun-And-Benefit-WP.pdf](https://www.blackhat.com/docs/us-14/materials/us-14-Oh-Reverse-Engineering-Flash-Memory-For-Fun-And-Benefit-WP.pdf)
 
@@ -28,14 +30,21 @@ python setup.py install
 ## Usage
 
 ```
-usage: yand_cli.py [-h] [-r] [-w] [-f FILE]
+usage: yand_cli.py [-h] [-V] [-r] [-w] [-f FILE] [-P PAGE_SIZE]
+                   [-B PAGES_PER_BLOCK] [-K NUMBER_OF_BLOCKS]
 
 optional arguments:
   -h, --help            show this help message and exit
-  -r, --read            read NAND
-  -w, --write           write NAND
-  -f FILE, --file FILE  file to write to, or read from
-
+  -V, --version         Show version
+  -r, --read            Read all NAND Flash
+  -w, --write           Write NAND from a raw dump
+  -f FILE, --file FILE  File to write to, or read from
+  -P PAGE_SIZE, --page_size PAGE_SIZE
+                        Specify page size & OOB size in bytes, ie: "2048,128"
+  -B PAGES_PER_BLOCK, --pages_per_block PAGES_PER_BLOCK
+                        Specify the number of pages per block
+  -K NUMBER_OF_BLOCKS, --number_of_blocks NUMBER_OF_BLOCKS
+                        Specify the number blocks
 ```
 
 For a first detection of you NAND Flash, run the script with no option. This will attempt autodetection of the flash geometry with ONFI:
