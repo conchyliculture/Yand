@@ -76,7 +76,7 @@ end_port = 9000
 for port in range(start_port, end_port):
     try:
         httpd = HTTPServer(('', port), RequestHandler)
-        print('Starting Webserver at port {0:d}'.format(port))
+        print('Starting Webserver on http://localhost:{0:d}/'.format(port))
         print('Hit Ctrl-C to quit')
         httpd.serve_forever()
     except OSError:
