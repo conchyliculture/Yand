@@ -60,8 +60,7 @@ if [ ! -d "${PGM_DIR}" ] ; then
     mkdir -p "${PGM_DIR}"
     echo "Making the sub-pics in ${PGM_DIR} ...."
 
-    echo "${COMPILED_PGM_TOOL}" "${DUMP_FILEPATH}" "${PAGE_SIZE}" "${PGM_DIR}"  "${NUMBER_OF_SPLITS}"
-    "${COMPILED_PGM_TOOL}" "${DUMP_FILEPATH}" "${PAGE_SIZE}" "${PGM_DIR}"  "${STEPS}"
+    "${COMPILED_PGM_TOOL}" "${DUMP_FILEPATH}" "${PAGE_SIZE}" "${PGM_DIR}" "${NUMBER_OF_SPLITS}"
     if [[ $? != 0 ]] ; then
         rmdir "${PGM_DIR}"
         exit 1
@@ -72,7 +71,7 @@ if [ ! -d "${TILES_DIR}" ] ; then
     if [ ! -f "${BIG_PNG}" ] ; then
         echo "Joining the sub-pics into ${BIG_PNG} ...."
         file_list="$(ls -1 "${PGM_DIR}"/*.pgm | paste -sd " ")"
-        vips --vips-progress VipsArrayJoin "${file_list}"  "${SMOL_PNG}" --across "${STEPS}"
+        vips --vips-progress VipsArrayJoin "${file_list}"  "${SMOL_PNG}" --across "${NUMBER_OF_SPLITS}"
         if [[ $? != 0 ]] ; then
             exit 1
         fi
