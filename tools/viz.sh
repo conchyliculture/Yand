@@ -84,7 +84,7 @@ if [ ! -d "${TILES_DIR}" ] ; then
     fi
     mkdir -p "${TILES_DIR}"
     echo "Building tiles in ${TILES_DIR}"
-    vips dzsave "${BIG_PNG}" "${TILES_DIR}" --layout google
+    vips --vips-progress dzsave "${BIG_PNG}" "${TILES_DIR}" --layout google
     if [[ $? != 0 ]] ; then
         rmdir "${TILES_DIR}"
         exit 1
