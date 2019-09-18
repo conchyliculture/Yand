@@ -46,9 +46,9 @@ int convert(const char *source_path, const char *destination_path, long width, l
 }
 
 int usage() {
-      printf("Usage: %s <input_file> <page_size> <dest_directory> [columns]\n", __FILE__);
-      printf("Generates <columns> PGM files where 1 pixel represent the value of one byte in the dump\n");
-      return EXIT_FAILURE;
+  printf("Usage: %s <input_file> <page_size> <dest_directory> [columns]\n", __FILE__);
+  printf("Generates <columns> PGM files where 1 pixel represent the value of one byte in the dump\n");
+  return EXIT_FAILURE;
 }
  
 int main(int argc, char **argv) {
@@ -76,6 +76,10 @@ int main(int argc, char **argv) {
   inputfile_size = st.st_size;
 
   page_size = strtol(argv[2], NULL, 10);
+  if ((page_size < 1) || (page_size > 1*1024*1024)) {
+      printf("Invalid page size: '%s'\n", argv[2]);
+      return EXIT_FAILURE;
+  }
 
   if (inputfile_size % page_size != 0) {
       printf("WARNING: %s is of size %ld, which is not a multiple of page size %ld\n", inputfile_path, inputfile_size, page_size);
@@ -99,7 +103,7 @@ int main(int argc, char **argv) {
       snprintf(dest_picture_path, PATH_MAX, "%s/%s_%d_%ld-%ld.pgm", destdir_path, inputfile_name, i, offset, offset+pixel_by_pic);
       res = convert(inputfile_name, dest_picture_path, dimx, dimy, offset);
       if (res != 0 ) {
-          printf("ERROR trying to convert %s", dest_picture_path);
+          printf("ERROR trying to convert %s\n", dest_picture_path);
           free(dest_picture_path);
           return res;
       }
