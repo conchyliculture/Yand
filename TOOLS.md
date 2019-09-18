@@ -10,6 +10,11 @@ visualization thing in your browser.
 
 ![Demo](doc/giphy.gif)
 
+What you are seeing is all the pages stacked together, then the very "high" column is split into 8 smaller colums, that
+are then stitched together horizontally.
+
+## Installation / Usage
+
 You need to have `libvips-tools` installed.
 
 Just run the script with a dump file and a page size, and wait for a bit

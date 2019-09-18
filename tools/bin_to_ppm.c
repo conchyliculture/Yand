@@ -1,71 +1,61 @@
+#include <libgen.h>
+#include <linux/limits.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 
 // This generates PGM images from a large input binary file.
-
-//void convert_xor(const char *source1, const char *source2, const char *dest, int width, int height, int offset) {
-//  int i, j;
-//  FILE *destp = fopen(dest, "wb"); /* b - binary mode */
-//  FILE *sourcep1 = fopen(source1, "rb"); /* b - binary mode */
-//  FILE *sourcep2 = fopen(source2, "rb"); /* b - binary mode */
-//  printf("Writing %s\n", dest);
-//  (void) fprintf(destp, "P5\n%d %d\n255\n", width, height);
-//  fseek(sourcep1, offset, SEEK_SET);
-//  fseek(sourcep2, offset, SEEK_SET);
-//  for (j = 0; j < width; ++j)
-//  {
-//    for (i = 0; i < height; ++i)
-//    {
-//      int c1 = fgetc(sourcep1);
-//      int c2 = fgetc(sourcep2);
-//      int c3 = c1^c2;
 //
-//      (void) fwrite(&c3, 1, 1, destp);
-//    }
-//  }
-//  (void) fclose(destp);
-//  (void) fclose(sourcep1);
-//  (void) fclose(sourcep2);
-//}
-
+// This was written by someone who doesn't know shit about C.
+// This person knows he's bad, but also has feelings.
 
 /* Generates the .pgm file.
  *
  * It will be width x height, with bytes taken from source, starting at offset offset.
  */
-void convert(const char *source, const char *dest, int width, int height, int offset) {
+int convert(const char *source_path, const char *destination_path, long width, long height, long offset) {
   int i, j;
-  FILE *destp = fopen(dest, "wb");
-  FILE *sourcep = fopen(source, "rb");
-  (void) fprintf(destp, "P5\n%d %d\n255\n", width, height);
+  FILE *destp = fopen(destination_path, "wb");
+  FILE *sourcep = fopen(source_path, "rb");
+  if (destp == NULL) {
+      printf("Could not open %s for writing\n", destination_path);
+      return EXIT_FAILURE;
+  }
+  if (sourcep == NULL) {
+      printf("Could not open %s for reading\n", source_path);
+      return EXIT_FAILURE;
+  }
+  fprintf(destp, "P5\n%ld %ld\n255\n", width, height);
   fseek(sourcep, offset, SEEK_SET);
-  printf("Writing %s\n", dest);
+  printf("Writing %s\n", destination_path);
   for (j = 0; j < width; ++j)
   {
     for (i = 0; i < height; ++i)
     {
-      unsigned char c = fgetc(sourcep);
-      (void) fwrite(&c, 1, 1, destp);
+      // Very unefficient 1-by-1 byte reading lol
+      int c = fgetc(sourcep);
+      if (c != EOF) {
+        fwrite(&c, 1, 1, destp);
+      }
     }
   }
-  (void) fclose(destp);
-  (void) fclose(sourcep);
+  fclose(destp);
+  fclose(sourcep);
+  return EXIT_SUCCESS;
 }
 
 int usage() {
       printf("Usage: %s <input_file> <page_size> <dest_directory> [columns]\n", __FILE__);
       printf("Generates <columns> PGM files where 1 pixel represent the value of one byte in the dump\n");
-      return 1;
+      return EXIT_FAILURE;
 }
  
 int main(int argc, char **argv) {
   struct stat st;
-  long size;
-  long page;
-  long offset = 0;
-  int columns = 8;
+  long inputfile_size = 0;
+  long page_size = 0;
+  int filesplit_number = 8;
 
   if (argc == 1 || (strncmp(argv[1], "--help", 6)==0) || (strncmp(argv[1], "-h", 6) == 0)) {
       return usage();
@@ -74,35 +64,49 @@ int main(int argc, char **argv) {
   if (argc < 4) {
       return usage();
   }
-  char *input_filename = argv[1];
-  char *dest_dir = argv[3];
 
-  stat(input_filename, &st);
-  size = st.st_size;
+  char *inputfile_path = argv[1];
+  char *destdir_path = argv[3];
 
-  page = strtol(argv[2], NULL, 10);
+  int res = stat(inputfile_path, &st);
+  if (res != 0) {
+      printf("ERROR: can't read input file size: '%s'\n", inputfile_path);
+      return EXIT_FAILURE;
+  }
+  inputfile_size = st.st_size;
 
-  if (size % page != 0) {
-      printf("%s is of size %ld, which is not a multiple of page size %ld\n", input_filename, size, page);
-      return 1;
+  page_size = strtol(argv[2], NULL, 10);
+
+  if (inputfile_size % page_size != 0) {
+      printf("WARNING: %s is of size %ld, which is not a multiple of page size %ld\n", inputfile_path, inputfile_size, page_size);
+      printf("WARNING: We might be losing some data\n");
   }
 
   if (argc == 5) {
-      columns = strtol(argv[4], NULL, 10);
+      filesplit_number = strtol(argv[4], NULL, 10);
   }
 
-  const int dimx = page;
-  const long pixel_by_pic = size / columns;
+  const int dimx = page_size;
+  const long pixel_by_pic = inputfile_size / filesplit_number;
   const int dimy = pixel_by_pic / dimx;
 
-  printf("I'll generate %d PGM files for file %s\n", columns, input_filename);
+  char *inputfile_name = basename(inputfile_path);
+  printf("I'll generate %d PGM files for file %s\n", filesplit_number, inputfile_name);
 
-  char dest[1024];
-  for (int i=0; i < columns; i++) {
-      snprintf(dest, 1024,  "%s/%s_%d_%ld-%ld.pgm", dest_dir, input_filename, i, offset, offset+pixel_by_pic);
-      convert(input_filename, dest, dimx, dimy, offset);
+  char *dest_picture_path = (char *)malloc(PATH_MAX);
+  long offset = 0;
+  for (int i=0; i < filesplit_number; i++) {
+      snprintf(dest_picture_path, PATH_MAX, "%s/%s_%d_%ld-%ld.pgm", destdir_path, inputfile_name, i, offset, offset+pixel_by_pic);
+      res = convert(inputfile_name, dest_picture_path, dimx, dimy, offset);
+      if (res != 0 ) {
+          printf("ERROR trying to convert %s", dest_picture_path);
+          free(dest_picture_path);
+          return res;
+      }
+
       offset += pixel_by_pic;
   }
+  free(dest_picture_path);
 
-  return 0;
+  return EXIT_SUCCESS;
 }
