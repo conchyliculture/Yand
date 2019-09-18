@@ -50,7 +50,7 @@ fi
 
 if [ ! -f "${COMPILED_PGM_TOOL}" ] ; then
     echo "Compiling ${COMPILED_PGM_TOOL}"
-    gcc "${SRC_PGM_TOOL}" -o "${COMPILED_PGM_TOOL}"
+    gcc -Werror -Wpedantic "${SRC_PGM_TOOL}" -o "${COMPILED_PGM_TOOL}"
     if [[ $? != 0 ]] ; then
         exit 1
     fi
