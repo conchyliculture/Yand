@@ -36,16 +36,16 @@ MAIN_HTML = """
 </body></html>
 """%(map_id)
 
-# HTTPRequestHandler class
 class RequestHandler(BaseHTTPRequestHandler):
+    """Class to handle http requests."""
 
-  # GET
-    def do_GET(self):
-        content = self.handle_http()
+    def do_GET(self):  # pylint: disable=invalid-name
+        """Handle GET requests"""
+        content = self.HandleHTTP()
         self.wfile.write(content)
-        return
 
-    def handle_http(self):
+    def HandleHTTP(self):
+        """Actually handle the request for tiles & such..."""
         res = b'ERROR'
         if self.path in ['/', '/index.html']:
             self.send_response(200)
