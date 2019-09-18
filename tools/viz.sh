@@ -68,22 +68,21 @@ if [ ! -d "${PGM_DIR}" ] ; then
     fi
 fi
 
-if [ ! -f "${BIG_PNG}" ] ; then
-    echo "Joining the sub-pics into ${BIG_PNG} ...."
-    file_list="$(ls -1 "${PGM_DIR}"/*.pgm | paste -sd " ")"
-    vips --vips-progress VipsArrayJoin "${file_list}"  "${SMOL_PNG}" --across "${STEPS}"
-    if [[ $? != 0 ]] ; then
-        exit 1
-    fi
-    echo "Scaling it up for more glorious pixels"
-    vips --vips-progress VipsResize "${SMOL_PNG}" "${BIG_PNG}" 2
-    if [[ $? != 0 ]] ; then
-        exit 1
-    fi
-    rm "${SMOL_PNG}"
-fi
-
 if [ ! -d "${TILES_DIR}" ] ; then
+    if [ ! -f "${BIG_PNG}" ] ; then
+        echo "Joining the sub-pics into ${BIG_PNG} ...."
+        file_list="$(ls -1 "${PGM_DIR}"/*.pgm | paste -sd " ")"
+        vips --vips-progress VipsArrayJoin "${file_list}"  "${SMOL_PNG}" --across "${STEPS}"
+        if [[ $? != 0 ]] ; then
+            exit 1
+        fi
+        echo "Scaling it up for more glorious pixels"
+        vips --vips-progress VipsResize "${SMOL_PNG}" "${BIG_PNG}" 2
+        if [[ $? != 0 ]] ; then
+            exit 1
+        fi
+        rm "${SMOL_PNG}"
+    fi
     mkdir -p "${TILES_DIR}"
     echo "Building tiles in ${TILES_DIR}"
     vips dzsave "${BIG_PNG}" "${TILES_DIR}" --layout google
@@ -95,8 +94,7 @@ fi
 
 echo "ALL DONE"
 echo
-echo "You might want to delete ${BIG_PNG}, it's not going to be used any more"
-echo
-echo "Starting webserver... Then open your web browser to http://localhost:8000"
-echo "Ctrl-C to quit"
+if [ -f ${BIG_PNG} ]; then
+    echo "You might want to delete ${BIG_PNG}, it's not going to be used any more"
+fi
 python3 "${HTTP_SERV}" -d "${TILES_DIR}"

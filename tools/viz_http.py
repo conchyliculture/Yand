@@ -71,5 +71,13 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_error(404, 'File Not Found: %s' % self.path)
         return res
 
-httpd = HTTPServer(('', 8000), RequestHandler)
-httpd.serve_forever()
+start_port = 8000
+end_port = 9000
+for port in range(start_port, end_port):
+    try:
+        httpd = HTTPServer(('', port), RequestHandler)
+        print('Starting Webserver at port {0:d}'.format(port))
+        print('Hit Ctrl-C to quit')
+        httpd.serve_forever()
+    except OSError:
+        pass
