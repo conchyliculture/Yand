@@ -24,6 +24,8 @@ class YandCli:
         self.parser.add_argument(
             '-w', '--write', action='store_true', help='Write NAND from a raw dump')
         self.parser.add_argument(
+            '-e', '--erase', action='store_true', help='Fill NAND with 0xFF')
+        self.parser.add_argument(
             '-f', '--file', action='store', help='File to write to, or read from')
 
         self.parser.add_argument(
@@ -74,6 +76,8 @@ class YandCli:
             ftdi_nand.DumpFlashToFile(options.file)
         elif options.write:
             ftdi_nand.WriteFileToFlash(options.file)
+        elif options.erase:
+            ftdi_nand.Erase()
 
 
 if __name__ == "__main__":
