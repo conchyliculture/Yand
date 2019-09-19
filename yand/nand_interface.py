@@ -248,7 +248,7 @@ Device Size: {6:s}
 
         Args:
             page_number(int): the number of the page.
-            data(bytearry): the data to program.
+            data(bytearray): the data to program.
         Raises:
             errors.YandException: if trying to write more data than a block length.
         """
@@ -282,11 +282,28 @@ Device Size: {6:s}
             self.EraseBlock(block)
             progress_bar.update(self.page_size * self.pages_per_block)
 
-    def FillWithValue(value, start=0, end=None):
+    def FillWithValue(self, value, start=0, end=None):
         """Fill the NAND flash with a specific value.
 
         Args:
-            value(int)
+            value(int): the value to write.
+            start(int): the first page to write.
+            end(int): the last page to write.
+        """
+        total_size = self.GetTotalSize()
+        if start and end:
+            total_size = (end - start) * self.page_size
+
+        progress_bar = tqdm(
+            total=total_size,
+            unit_scale=True,
+            unit_divisor=1024,
+            unit='B'
+        )
+        for page in range(start, end or self.GetTotalPages()):
+            self.WritePage(page, bytearray([value]*self.page_size))
+            progress_bar.update(self.page_size)
+
 
     def WriteFileToFlash(self, filename):
         """Overwrite file to NAND Flash.
