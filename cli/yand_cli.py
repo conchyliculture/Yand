@@ -78,7 +78,7 @@ class YandCli:
         print(ftdi_nand.GetInfos())
 
         if options.read:
-            ftdi_nand.DumpFlashToFile(options.file, start=options.start, end=options.end)
+            ftdi_nand.DumpFlashToFile(options.file, start=int(options.start), end=int(options.end))
         elif options.write:
             ftdi_nand.WriteFileToFlash(options.file)
         elif options.erase:
