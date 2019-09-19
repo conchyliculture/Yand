@@ -27,6 +27,8 @@ class YandCli:
             '-e', '--erase', action='store_true', help='Fill NAND with 0xFF')
         self.parser.add_argument(
             '-f', '--file', action='store', help='File to write to, or read from')
+        self.parser.add_argument(
+            '--write_value', action='store', help='Fill with this value.')
 
         self.parser.add_argument(
             '-P', '--page_size', action='store',
@@ -37,9 +39,11 @@ class YandCli:
             '-K', '--number_of_blocks', action='store', help='Specify the number blocks')
 
         self.parser.add_argument(
-            '--start', action='store', help='Set a starting number for the operation (page for read, block for writing/erase')
+            '--start', action='store',
+            help='Set a starting number for the operation (page for read, block for writing/erase')
         self.parser.add_argument(
-            '--end', action='store', help='Set a end number for the operation (page for read, block for writing/erase')
+            '--end', action='store',
+            help='Set a end number for the operation (page for read, block for writing/erase')
 
         args = self.parser.parse_args()
         return args
@@ -83,6 +87,9 @@ class YandCli:
             ftdi_nand.WriteFileToFlash(options.file)
         elif options.erase:
             ftdi_nand.Erase()
+        elif options.write_value:
+            ftdi_nand.FillWithValue(
+                int(options.write_value), start=int(options.start), end=int(options.end))
 
 
 if __name__ == "__main__":

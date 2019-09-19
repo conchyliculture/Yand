@@ -282,6 +282,12 @@ Device Size: {6:s}
             self.EraseBlock(block)
             progress_bar.update(self.page_size * self.pages_per_block)
 
+    def FillWithValue(value, start=0, end=None):
+        """Fill the NAND flash with a specific value.
+
+        Args:
+            value(int)
+
     def WriteFileToFlash(self, filename):
         """Overwrite file to NAND Flash.
 
