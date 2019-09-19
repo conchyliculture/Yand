@@ -144,8 +144,12 @@ Device Size: {6:s}
         """
         if not destination:
             raise errors.YandException('Please specify where to write')
+        total_size = self.GetTotalSize()
+        if start and end:
+            total_size = (end - start) * self.page_size
+
         progress_bar = tqdm(
-            total=self.GetTotalSize(),
+            total=total_size,
             unit_scale=True,
             unit_divisor=1024,
             unit='B'
