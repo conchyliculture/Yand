@@ -38,7 +38,13 @@ int convert(const char *source_path, const char *destination_path, long width, l
       // Very unefficient 1-by-1 byte reading lol
       int c = fgetc(sourcep);
       if (c != EOF) {
-        fwrite(&c, 1, 1, destp);
+        int result = fwrite(&c, 1, 1, destp);
+        if (result != 1) {
+            perror("Error: ");
+            fclose(destp);
+            fclose(sourcep);
+            return 1;
+        }
       }
     }
   }
