@@ -34,6 +34,11 @@ class YandCli:
         self.parser.add_argument(
             '-K', '--number_of_blocks', action='store', help='Specify the number blocks')
 
+        self.parser.add_argument(
+            '--start', action='store', help='Set a starting number for the operation (page for read, block for writing/erase')
+        self.parser.add_argument(
+            '--end', action='store', help='Set a end number for the operation (page for read, block for writing/erase')
+
         args = self.parser.parse_args()
         return args
 
@@ -71,7 +76,7 @@ class YandCli:
         print(ftdi_nand.GetInfos())
 
         if options.read:
-            ftdi_nand.DumpFlashToFile(options.file)
+            ftdi_nand.DumpFlashToFile(options.file, start=options.start, end=options.end)
         elif options.write:
             ftdi_nand.WriteFileToFlash(options.file)
 

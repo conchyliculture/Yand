@@ -132,11 +132,13 @@ Device Size: {6:s}
         if not (self.page_size and self.pages_per_block and self.number_of_blocks):
             self._SetupFlash()
 
-    def DumpFlashToFile(self, destination):
+    def DumpFlashToFile(self, destination, start=0, end=None):
         """Reads all pages from the flash, and writes it to a file.
 
         Args:
             destination(str): the destination file.
+            start(int): Page to start dumping from.
+            end(int): Page to stop dumping at.
         Raises:
             errors.YandException: if no destination file is provided.
         """
@@ -149,7 +151,7 @@ Device Size: {6:s}
             unit='B'
         )
         with open(destination, 'wb') as dest_file:
-            for page in range(self.GetTotalPages()):
+            for page in range(start, end or self.GetTotalPages()):
                 dest_file.write(self.ReadPage(page))
                 progress_bar.update(self.page_size)
 
