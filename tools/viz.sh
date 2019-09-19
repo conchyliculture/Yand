@@ -18,11 +18,15 @@
 #         ########  |  ########  |
 #         ######## -   ######## -
 
-NUMBER_OF_SPLITS=8
 
 DUMP_FILEPATH=$(realpath "${1}")
 DUMP_FILENAME=$(basename "${DUMP_FILEPATH}")
 PAGE_SIZE="${2}"
+
+NUMBER_OF_SPLITS="${3}"
+if [ "${NUMBER_OF_SPLITS}" == "" ] ; then
+    NUMBER_OF_SPLITS=8
+fi
 
 TOOLS_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 HTTP_SERV="${TOOLS_DIR}/viz_http.py"
