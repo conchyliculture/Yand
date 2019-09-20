@@ -299,11 +299,11 @@ Device Size: {6:s}
             end(int): erase up to this block. -1 means the end."""
         total_size = self.GetTotalSize()
 
-        if end == -1:
-            end = self.number_of_blocks
-
         if end > 0:
             total_size = (end - start) * self.page_size
+
+        if end == -1:
+            end = self.number_of_blocks
 
         progress_bar = tqdm(
             total=total_size,
