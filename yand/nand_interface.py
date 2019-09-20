@@ -299,11 +299,10 @@ Device Size: {6:s}
             end(int): erase up to this block. -1 means the end."""
         total_size = self.GetTotalSize()
 
-        if end > 0:
-            total_size = (end - start) * self.page_size
-
         if end == -1:
             end = self.number_of_blocks
+        else:
+            total_size = (end - start) * self.page_size
 
         progress_bar = tqdm(
             total=total_size,
@@ -316,16 +315,18 @@ Device Size: {6:s}
             progress_bar.update(self.page_size * self.pages_per_block)
 
     def FillWithValue(self, value, start=0, end=None):
-        """Fill the NAND flash with a specific value.
+        """Fill NAND flash pages with a specific value.
 
         Args:
             value(int): the value to write.
             start(int): the first page to write.
-            end(int): the last page to write.
+            end(int): write pages until this one (excluded).
         """
         total_size = self.GetTotalSize()
 
-        if end > 0:
+        if end == -1:
+            end = int(total_size / self.page_size)
+        else:
             total_size = (end - start) * self.page_size
 
         progress_bar = tqdm(
