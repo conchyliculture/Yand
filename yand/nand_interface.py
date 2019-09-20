@@ -1,10 +1,31 @@
 """Module to talk to a NAND"""
+
+from io import BytesIO
+from io import SEEK_SET
 import os
+import sys
 from tqdm import tqdm
 
 from yand import errors
 from yand import ftdi_device
 
+class RingBytesIO(BytesIO):
+    """Implements a 'ring' BytesIO, that starts from the beggining of the buffer when
+    the end is reached."""
+
+    def seek(self, offset, whence=SEEK_SET):
+        super().seek(offset % len(self.getvalue()), whence=whence)
+
+    def read(self, l):
+        res = b''
+        while len(res) < l:
+            bytes_left = l - len(res)
+            r = super().read(bytes_left)
+            res += r
+            if len(r) < bytes_left:
+                self.seek(0)
+                res += super().read(l - len(res))
+        return res
 
 class NandInterface:
     """Class to operate on a NAND Flash"""
@@ -13,6 +34,7 @@ class NandInterface:
     NAND_CMD_PROG_PAGE_START = 0x10
     NAND_CMD_READSTART = 0x30
     NAND_CMD_ERASE = 0x60
+    NAND_CMD_STATUS = 0x70
     NAND_CMD_PROG_PAGE = 0x80
     NAND_CMD_READID = 0x90
     NAND_CMD_READ_PARAM_PAGE = 0xEC
@@ -120,8 +142,8 @@ Device Size: {6:s}
         number_lun_per_chip = onfi_data[100]
         self.number_of_blocks = number_blocks_per_lun * number_lun_per_chip
 
-        addr_cycles = onfi_data[101]
-        self.address_cycles = (addr_cycles & 0x0f) + ((addr_cycles & 0xf0) >> 4)
+        address_cycles = onfi_data[101]
+        self.address_cycles = (address_cycles & 0x0f) + ((address_cycles & 0xf0) >> 4)
 
     def Setup(self):
         """Sets the underlying IO and flash characteristics"""
@@ -132,32 +154,39 @@ Device Size: {6:s}
         if not (self.page_size and self.pages_per_block and self.number_of_blocks):
             self._SetupFlash()
 
-    def DumpFlashToFile(self, destination, start=0, end=None):
+    def DumpFlashToFile(self, destination, start=0, end=-1):
         """Reads all pages from the flash, and writes it to a file.
 
         Args:
             destination(str): the destination file.
             start(int): Page to start dumping from.
-            end(int): Page to stop dumping at.
+            end(int): Page to stop dumping at. Go until the end if -1.
         Raises:
             errors.YandException: if no destination file is provided.
         """
         if not destination:
             raise errors.YandException('Please specify where to write')
-        total_size = self.GetTotalSize()
-        if start and end:
-            total_size = (end - start) * self.page_size
 
-        progress_bar = tqdm(
-            total=total_size,
-            unit_scale=True,
-            unit_divisor=1024,
-            unit='B'
-        )
-        with open(destination, 'wb') as dest_file:
-            for page in range(start, end or self.GetTotalPages()):
-                dest_file.write(self.ReadPage(page))
-                progress_bar.update(self.page_size)
+        total_size = self.GetTotalSize()
+        if end > 0:
+            total_size = (end - start) * self.page_size
+        else:
+            end = self.GetTotalPages()
+
+        if destination == "-":
+            for page in range(start, end):
+                sys.stdout.buffer.write(self.ReadPage(page))
+        else:
+            progress_bar = tqdm(
+                total=total_size,
+                unit_scale=True,
+                unit_divisor=1024,
+                unit='B'
+            )
+            with open(destination, 'wb') as dest_file:
+                for page in range(start, end or self.GetTotalPages()):
+                    dest_file.write(self.ReadPage(page))
+                    progress_bar.update(self.page_size)
 
     def SendCommand(self, command):
         """Sends a command address to the Flash.
@@ -193,6 +222,22 @@ Device Size: {6:s}
         data = (address).to_bytes(8, byteorder='little')
         self.ftdi_device.Write(data[0:size], address=True)
 
+    def EraseBlock(self, block):
+        """Erase a block
+
+        Args:
+            block(int): the block to erase.
+        """
+        row = block * self.pages_per_block
+        self.ftdi_device.write_protect = False
+        self.SendCommand(self.NAND_CMD_ERASE)
+        self.SendAddress(row, self.address_cycles) # Is 3 always the case?
+        self.SendCommand(self.NAND_CMD_ERASE_START)
+        self.ftdi_device.WaitReady()
+        self.ftdi_device.write_protect = True
+
+
+
     def EraseBlockByPage(self, page_number):
         """Erase the block containing a page.
 
@@ -212,7 +257,7 @@ Device Size: {6:s}
 
         Args:
             page_number(int): the number of the page.
-            data(bytearry): the data to program.
+            data(bytearray): the data to program.
         Raises:
             errors.YandException: if trying to write more data than a block length.
         """
@@ -222,7 +267,7 @@ Device Size: {6:s}
                     len(data), self.page_size))
         self.ftdi_device.write_protect = False
 
-        page_address = page_number << 8
+        page_address = page_number << 16
 
         self.SendCommand(self.NAND_CMD_PROG_PAGE)
         self.ftdi_device.WaitReady()
@@ -231,8 +276,69 @@ Device Size: {6:s}
         self.ftdi_device.Write(data)
         self.SendCommand(self.NAND_CMD_PROG_PAGE_START)
         self.ftdi_device.WaitReady()
+        self.CheckStatus()
 
         self.ftdi_device.write_protect = True
+
+    def CheckStatus(self):
+        """Check the status of the last operation."""
+        self.SendCommand(self.NAND_CMD_STATUS)
+        status = self.ftdi_device.Read(1)[0]
+        if (status & 0x2) == 0x2 and (status & 0x20 == 0x20):
+            # applies to PROGRAM-, and COPYBACK PROGRAM-series operations
+            raise errors.StatusProgramError('Status is {0:s}'.format(status.hex()))
+        if (status & 0x1) == 0x1 and (status & 0x10 == 0x10):
+            # applies to PROGRAM-, ERASE-, and COPYBACK PROGRAM-series operations
+            raise errors.StatusProgramError('Status is {0:s}'.format(status.hex()))
+
+    def Erase(self, start=0, end=-1):
+        """Erase all blocks in the NAND Flash.
+
+        Args:
+            start(int): erase from this block number.
+            end(int): erase up to this block. -1 means the end."""
+        total_size = self.GetTotalSize()
+
+        if end == -1:
+            end = self.number_of_blocks
+        else:
+            total_size = (end - start) * self.page_size
+
+        progress_bar = tqdm(
+            total=total_size,
+            unit_scale=True,
+            unit_divisor=1024,
+            unit='B'
+        )
+        for block in range(start, end):
+            self.EraseBlock(block)
+            progress_bar.update(self.page_size * self.pages_per_block)
+
+    def FillWithValue(self, value, start=0, end=None):
+        """Fill NAND flash pages with a specific value.
+
+        Args:
+            value(int): the value to write.
+            start(int): the first page to write.
+            end(int): write pages until this one (excluded).
+        """
+        total_size = self.GetTotalSize()
+
+        if end == -1:
+            end = int(total_size / self.page_size)
+        else:
+            total_size = (end - start) * self.page_size
+
+        progress_bar = tqdm(
+            total=total_size,
+            unit_scale=True,
+            unit_divisor=1024,
+            unit='B'
+        )
+        for page in range(start, end or self.GetTotalPages()):
+            self.WritePage(page, bytearray([value]*self.page_size))
+            progress_bar.update(self.page_size)
+
 
     def WriteFileToFlash(self, filename):
         """Overwrite file to NAND Flash.
@@ -258,7 +364,6 @@ Device Size: {6:s}
             unit='B'
         )
         with open(filename, 'rb') as input_file:
-
             for page_number in range(self.GetTotalPages()):
                 if page_number % self.pages_per_block == 0:
                     self.EraseBlockByPage(page_number)
