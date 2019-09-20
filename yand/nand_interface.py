@@ -33,6 +33,7 @@ class NandInterface:
     NAND_CMD_PROG_PAGE_START = 0x10
     NAND_CMD_READSTART = 0x30
     NAND_CMD_ERASE = 0x60
+    NAND_CMD_STATUS = 0x70
     NAND_CMD_PROG_PAGE = 0x80
     NAND_CMD_READID = 0x90
     NAND_CMD_READ_PARAM_PAGE = 0xEC
@@ -269,6 +270,18 @@ Device Size: {6:s}
         self.ftdi_device.WaitReady()
 
         self.ftdi_device.write_protect = True
+
+    def CheckStatus(self):
+        """Check the status of the last operation."""
+        self.SendCommand(self.NAND_CMD_STATUS)
+        status = self.ftdi_device.Read(1)[0]
+        if (status & 0x2) == 0x2 and (status & 0x20 == 0x20):
+            # applies to PROGRAM-, and COPYBACK PROGRAM-series operations
+            raise errors.StatusProgramError('Status is {0:s}'.format(status.hex()))
+        if (status & 0x1) == 0x1 and (status & 0x10 == 0x10):
+            # applies to PROGRAM-, ERASE-, and COPYBACK PROGRAM-series operations
+            raise errors.StatusProgramError('Status is {0:s}'.format(status.hex()))
+
 
     def Erase(self):
         """Erase all blocks in the NAND Flash."""
