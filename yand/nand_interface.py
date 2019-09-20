@@ -3,6 +3,7 @@
 from io import BytesIO
 from io import SEEK_SET
 import os
+import sys
 from tqdm import tqdm
 
 from yand import errors
@@ -153,32 +154,39 @@ Device Size: {6:s}
         if not (self.page_size and self.pages_per_block and self.number_of_blocks):
             self._SetupFlash()
 
-    def DumpFlashToFile(self, destination, start=0, end=None):
+    def DumpFlashToFile(self, destination, start=0, end=-1):
         """Reads all pages from the flash, and writes it to a file.
 
         Args:
             destination(str): the destination file.
             start(int): Page to start dumping from.
-            end(int): Page to stop dumping at.
+            end(int): Page to stop dumping at. Go until the end if -1.
         Raises:
             errors.YandException: if no destination file is provided.
         """
         if not destination:
             raise errors.YandException('Please specify where to write')
-        total_size = self.GetTotalSize()
-        if start and end:
-            total_size = (end - start) * self.page_size
 
-        progress_bar = tqdm(
-            total=total_size,
-            unit_scale=True,
-            unit_divisor=1024,
-            unit='B'
-        )
-        with open(destination, 'wb') as dest_file:
-            for page in range(start, end or self.GetTotalPages()):
-                dest_file.write(self.ReadPage(page))
-                progress_bar.update(self.page_size)
+        total_size = self.GetTotalSize()
+        if end > 0:
+            total_size = (end - start) * self.page_size
+        else:
+            end = self.GetTotalPages()
+
+        if destination == "-":
+            for page in range(start, end):
+                sys.stdout.buffer.write(self.ReadPage(page))
+        else:
+            progress_bar = tqdm(
+                total=total_size,
+                unit_scale=True,
+                unit_divisor=1024,
+                unit='B'
+            )
+            with open(destination, 'wb') as dest_file:
+                for page in range(start, end or self.GetTotalPages()):
+                    dest_file.write(self.ReadPage(page))
+                    progress_bar.update(self.page_size)
 
     def SendCommand(self, command):
         """Sends a command address to the Flash.
@@ -259,7 +267,7 @@ Device Size: {6:s}
                     len(data), self.page_size))
         self.ftdi_device.write_protect = False
 
-        page_address = page_number << 8
+        page_address = page_number << 16
 
         self.SendCommand(self.NAND_CMD_PROG_PAGE)
         self.ftdi_device.WaitReady()
@@ -268,6 +276,7 @@ Device Size: {6:s}
         self.ftdi_device.Write(data)
         self.SendCommand(self.NAND_CMD_PROG_PAGE_START)
         self.ftdi_device.WaitReady()
+        self.CheckStatus()
 
         self.ftdi_device.write_protect = True
 
@@ -282,16 +291,27 @@ Device Size: {6:s}
             # applies to PROGRAM-, ERASE-, and COPYBACK PROGRAM-series operations
             raise errors.StatusProgramError('Status is {0:s}'.format(status.hex()))
 
+    def Erase(self, start=0, end=-1):
+        """Erase all blocks in the NAND Flash.
 
-    def Erase(self):
-        """Erase all blocks in the NAND Flash."""
+        Args:
+            start(int): erase from this block number.
+            end(int): erase up to this block. -1 means the end."""
+        total_size = self.GetTotalSize()
+
+        if end == -1:
+            end = self.number_of_blocks
+
+        if end > 0:
+            total_size = (end - start) * self.page_size
+
         progress_bar = tqdm(
-            total=self.GetTotalSize(),
+            total=total_size,
             unit_scale=True,
             unit_divisor=1024,
             unit='B'
         )
-        for block in range(self.number_of_blocks):
+        for block in range(start, end):
             self.EraseBlock(block)
             progress_bar.update(self.page_size * self.pages_per_block)
 
@@ -304,7 +324,8 @@ Device Size: {6:s}
             end(int): the last page to write.
         """
         total_size = self.GetTotalSize()
-        if start and end:
+
+        if end > 0:
             total_size = (end - start) * self.page_size
 
         progress_bar = tqdm(

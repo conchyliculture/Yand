@@ -9,14 +9,17 @@ from yand import errors
 
 
 class YandCli:
-    """TODO"""
+    """Tool to use the Yand module"""
     def __init__(self):
-        """TODO"""
-
+        """Initializes a YandCli object."""
         self.parser = None
 
     def ParseArguments(self):
-        """TODO"""
+        """Parses arguments.
+
+        Returns:
+            argparse.NameSpace: the parsed options.
+        """
         self.parser = argparse.ArgumentParser()
 
         self.parser.add_argument('-V', '--version', action='store_true', help='Show version')
@@ -24,9 +27,10 @@ class YandCli:
         self.parser.add_argument(
             '-w', '--write', action='store_true', help='Write NAND from a raw dump')
         self.parser.add_argument(
-            '-e', '--erase', action='store_true', help='Fill NAND with 0xFF')
+            '-e', '--erase', action='store_true', help='Erase blocks')
         self.parser.add_argument(
-            '-f', '--file', action='store', help='File to write to, or read from')
+            '-f', '--file', action='store',
+            help='File to write to, or read from. "-" means stdin/stdout')
         self.parser.add_argument(
             '--write_value', action='store', help='Fill with this value.')
 
@@ -39,11 +43,13 @@ class YandCli:
             '-K', '--number_of_blocks', action='store', help='Specify the number blocks')
 
         self.parser.add_argument(
-            '--start', action='store',
-            help='Set a starting number for the operation (page for read, block for writing/erase')
+            '--start', action='store', type=int, default=0,
+            help=('Set a start bound for the operation. This bound is included.'
+                  '(for a READ operation, te unit is a page, a block for writing/erase'))
         self.parser.add_argument(
-            '--end', action='store',
-            help='Set a end number for the operation (page for read, block for writing/erase')
+            '--end', action='store', type=int, default=-1,
+            help=('Set a end number for the operation. This bound is excluded.'
+                  '(for a READ operation, te unit is a page, a block for writing/erase'))
 
         args = self.parser.parse_args()
         return args
@@ -78,18 +84,18 @@ class YandCli:
 
         ftdi_nand.Setup()
 
-
-        print(ftdi_nand.GetInfos())
+        if not options.file == '-':
+            print(ftdi_nand.GetInfos())
 
         if options.read:
             ftdi_nand.DumpFlashToFile(options.file, start=int(options.start), end=int(options.end))
         elif options.write:
             ftdi_nand.WriteFileToFlash(options.file)
         elif options.erase:
-            ftdi_nand.Erase()
+            ftdi_nand.Erase(start=options.start, end=options.end)
         elif options.write_value:
             ftdi_nand.FillWithValue(
-                int(options.write_value), start=int(options.start), end=int(options.end))
+                int(options.write_value), start=options.start, end=options.end)
 
 
 if __name__ == "__main__":
