@@ -1,7 +1,7 @@
 """Module to talk to a NAND"""
 
 from io import BytesIO
-from io import SEEK_SET
+from io import SEEK_CUR
 import os
 import sys
 from tqdm import tqdm
@@ -13,8 +13,8 @@ class RingBytesIO(BytesIO):
     """Implements a 'ring' BytesIO, that starts from the beggining of the buffer when
     the end is reached."""
 
-    def seek(self, offset, whence=SEEK_SET):
-        super().seek(offset % len(self.getvalue()), whence=whence)
+    def seek(self, offset, whence):
+        super().seek(offset % len(self.getvalue()), whence)
 
     def read(self, l):
         res = b''
@@ -370,3 +370,83 @@ Device Size: {6:s}
                 page_data = input_file.read(self.page_size)
                 self.WritePage(page_number, page_data)
                 progress_bar.update(self.page_size)
+
+    def ReadPageFromPic(self, pic, picture_width, picture_height, x=0, y=0):
+        """Returns data from a pgm file at a specific offset, that's one page length.
+
+        Args:
+            pic(file): the opened file like object
+            picture_width(int): the width of the input picture
+            picture_height(int): the height of the input picture
+            x(int): position in height starting from top.
+            y(int): the position in width starting from top.
+        Returns:
+            bytearray: the data read from the picture, padded with 0xFF
+        """
+        print('Reading from pic at x={0:d},y={1:d}'.format(x, y))
+        if y > picture_height:
+            print((
+                'warning, reading more ({0:d}) than input picture height ({1:d})'
+                'returning 0xFFs'
+                ).format(y, picture_height))
+            return bytearray([0xff]*self.page_size)
+        if x > picture_width:
+            print((
+                'warning, reading more ({0:d}) than input picture width ({1:d})'
+                'returning 0xFFs'
+                ).format(x, picture_height))
+            return bytearray([0xff]*self.page_size)
+
+        pic.seek(x*picture_width, SEEK_CUR) # We want to skip header
+        pic.seek(y, SEEK_CUR)
+
+        amount_to_read = picture_width - x
+        if amount_to_read > self.page_size:
+            amount_to_read = self.page_size
+
+        data = pic.read(amount_to_read)
+        return data.ljust(self.page_size, b'\xff')
+
+    def WritePGMToFlash(self, filename):
+        """Writes a picture to the NAND.
+
+        Args:
+            filename(str): the path to the file to write.
+        Raises:
+            errors.YandException: if something goes wrong.
+        """
+        with open(filename, 'rb') as source_pic:
+            magic = source_pic.read(3)
+            if magic != b'P5\x0a':
+                raise errors.YandException(
+                    'Input file {0:s} is not a PGM picture (bad magic)'.format(filename))
+            comment = b''
+            bb = source_pic.read(1)
+            while bb != b'\x0a':
+                # Comment
+                comment += bb
+                bb = source_pic.read(1)
+            if source_pic.read(1) != b'\x0a':
+                raise errors.YandException(
+                    'Input file {0:s} is not a PGM picture'.format(filename))
+            dimensions = b''
+            bb = source_pic.read(1)
+            while bb != b'\x0a':
+                dimensions += bb
+                bb = source_pic.read(1)
+            picture_width, picture_height = [int(d) for d in dimensions.split(b' ')]
+            if source_pic.read(4) != b'255\x0a':
+                raise errors.YandException((
+                    'Input file {0:s} is not a PGM picture '
+                    '(should have 255 as max value)').format(filename))
+            header_length = 3 + len(comment) + 1 + 1 + len(dimensions)+ 4
+            x = 0
+            y = 0
+            for page_number in range(self.pages_per_block * self.number_of_blocks):
+                source_pic.seek(header_length)
+                data = self.ReadPageFromPic(source_pic, picture_width, picture_height, x, y)
+                self.WritePage(page_number, data)
+                y += 1
+                if y == picture_height:
+                    x += self.page_size
+                    y = 0
