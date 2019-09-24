@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <libgen.h>
 #include <linux/limits.h>
 #include <stdlib.h>
@@ -20,10 +21,12 @@ int convert(const char *source_path, const char *destination_path, long width, l
   FILE *sourcep = fopen(source_path, "rb");
   if (destp == NULL) {
       printf("Could not open %s for writing\n", destination_path);
+      printf("Reason : %s\n", strerror(errno));
       return EXIT_FAILURE;
   }
   if (sourcep == NULL) {
       printf("Could not open %s for reading\n", source_path);
+      printf("Reason : %s\n", strerror(errno));
       return EXIT_FAILURE;
   }
   // Go to the offset
@@ -113,7 +116,7 @@ int main(int argc, char **argv) {
       // the output PGM files are goint go look like
       // dest_dir/dump.bin_0_start-end.pgm
       snprintf(dest_picture_path, PATH_MAX, "%s/%s_%d_%ld-%ld.pgm", destdir_path, inputfile_name, i, offset, offset+pixels_by_pic);
-      res = convert(inputfile_name, dest_picture_path, dimx, dimy, offset);
+      res = convert(inputfile_path, dest_picture_path, dimx, dimy, offset);
       if (res != 0 ) {
           printf("ERROR trying to convert %s\n", dest_picture_path);
           free(dest_picture_path);
