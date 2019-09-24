@@ -1,13 +1,17 @@
 """Module to talk to a NAND"""
 
 from io import BytesIO
-from io import SEEK_CUR
+from io import SEEK_CUR, SEEK_SET
+import logging
 import os
 import sys
 from tqdm import tqdm
 
 from yand import errors
 from yand import ftdi_device
+
+logging.basicConfig(filename='/tmp/yand.log', level=logging.INFO)
+
 
 class RingBytesIO(BytesIO):
     """Implements a 'ring' BytesIO, that starts from the beggining of the buffer when
@@ -23,7 +27,7 @@ class RingBytesIO(BytesIO):
             r = super().read(bytes_left)
             res += r
             if len(r) < bytes_left:
-                self.seek(0)
+                self.seek(0, SEEK_SET)
                 res += super().read(l - len(res))
         return res
 
@@ -61,7 +65,7 @@ class NandInterface:
 
     def GetTotalSize(self):
         """Returns the total size of the flash, in bytes"""
-        return self.page_size * self.pages_per_block * self.number_of_blocks
+        return self.page_size * self.GetTotalPages()
 
     def GetTotalPages(self):
         """Returns the number of pages of the Flash."""
@@ -154,37 +158,34 @@ Device Size: {6:s}
         if not (self.page_size and self.pages_per_block and self.number_of_blocks):
             self._SetupFlash()
 
-    def DumpFlashToFile(self, destination, start=0, end=-1):
+    def DumpFlashToFile(self, destination, start_page=0, end_page=None):
         """Reads all pages from the flash, and writes it to a file.
 
         Args:
             destination(str): the destination file.
-            start(int): Page to start dumping from.
-            end(int): Page to stop dumping at. Go until the end if -1.
+            start_page(int): Page to start dumping from.
+            end_page(int): Page to stop dumping at. Default is to the end.
         Raises:
             errors.YandException: if no destination file is provided.
         """
         if not destination:
             raise errors.YandException('Please specify where to write')
 
-        total_size = self.GetTotalSize()
-        if end > 0:
-            total_size = (end - start) * self.page_size
-        else:
-            end = self.GetTotalPages()
+        if not end_page:
+            end_page = self.GetTotalPages()
 
         if destination == "-":
-            for page in range(start, end):
+            for page in range(start_page, end_page):
                 sys.stdout.buffer.write(self.ReadPage(page))
         else:
             progress_bar = tqdm(
-                total=total_size,
+                total=self.GetTotalPages() * self.page_size,
                 unit_scale=True,
                 unit_divisor=1024,
                 unit='B'
             )
             with open(destination, 'wb') as dest_file:
-                for page in range(start, end or self.GetTotalPages()):
+                for page in range(start_page, end_page):
                     dest_file.write(self.ReadPage(page))
                     progress_bar.update(self.page_size)
 
@@ -235,22 +236,7 @@ Device Size: {6:s}
         self.SendCommand(self.NAND_CMD_ERASE_START)
         self.ftdi_device.WaitReady()
         self.ftdi_device.write_protect = True
-
-
-
-    def EraseBlockByPage(self, page_number):
-        """Erase the block containing a page.
-
-        Args:
-            page_number(int): the number of the page where we will erase the block.
-        """
-        block_address = page_number >> 8
-        self.ftdi_device.write_protect = False
-        self.SendCommand(self.NAND_CMD_ERASE)
-        self.SendAddress(block_address, 3) # Is 3 always the case?
-        self.SendCommand(self.NAND_CMD_ERASE_START)
-        self.ftdi_device.WaitReady()
-        self.ftdi_device.write_protect = True
+        logging.debug('erased block {0:d}'.format(block))
 
     def WritePage(self, page_number, data):
         """Writes a page to the NAND Flash
@@ -277,6 +263,7 @@ Device Size: {6:s}
         self.SendCommand(self.NAND_CMD_PROG_PAGE_START)
         self.ftdi_device.WaitReady()
         self.CheckStatus()
+        logging.debug('written page {0:d} (addr: {1:d})'.format(page_number, page_address))
 
         self.ftdi_device.write_protect = True
 
@@ -291,26 +278,23 @@ Device Size: {6:s}
             # applies to PROGRAM-, ERASE-, and COPYBACK PROGRAM-series operations
             raise errors.StatusProgramError('Status is {0:s}'.format(status.hex()))
 
-    def Erase(self, start=0, end=-1):
+    def Erase(self, start_block=0, end_block=None):
         """Erase all blocks in the NAND Flash.
 
         Args:
-            start(int): erase from this block number.
-            end(int): erase up to this block. -1 means the end."""
-        total_size = self.GetTotalSize()
+            start_block(int): erase from this block number.
+            end_block(int): erase up to this block. Default is to the end."""
 
-        if end == -1:
-            end = self.number_of_blocks
-        else:
-            total_size = (end - start) * self.page_size
+        if not end_block:
+            end_block = self.number_of_blocks
 
         progress_bar = tqdm(
-            total=total_size,
+            total=(end_block - start_block) * (self.pages_per_block * self.page_size),
             unit_scale=True,
             unit_divisor=1024,
             unit='B'
         )
-        for block in range(start, end):
+        for block in range(start_block, end_block):
             self.EraseBlock(block)
             progress_bar.update(self.page_size * self.pages_per_block)
 
@@ -335,8 +319,8 @@ Device Size: {6:s}
             unit_divisor=1024,
             unit='B'
         )
-        for page in range(start, end or self.GetTotalPages()):
-            self.WritePage(page, bytearray([value]*self.page_size))
+        for page_number in range(start, end or self.GetTotalPages()):
+            self.WritePage(page_number, bytearray([value]*self.page_size))
             progress_bar.update(self.page_size)
 
 
@@ -365,8 +349,6 @@ Device Size: {6:s}
         )
         with open(filename, 'rb') as input_file:
             for page_number in range(self.GetTotalPages()):
-                if page_number % self.pages_per_block == 0:
-                    self.EraseBlockByPage(page_number)
                 page_data = input_file.read(self.page_size)
                 self.WritePage(page_number, page_data)
                 progress_bar.update(self.page_size)
@@ -378,12 +360,11 @@ Device Size: {6:s}
             pic(file): the opened file like object
             picture_width(int): the width of the input picture
             picture_height(int): the height of the input picture
-            x(int): position in height starting from top.
-            y(int): the position in width starting from top.
+            x(int): the position in width starting from top.
+            y(int): position in height starting from top.
         Returns:
             bytearray: the data read from the picture, padded with 0xFF
         """
-        print('Reading from pic at x={0:d},y={1:d}'.format(x, y))
         if y > picture_height:
             print((
                 'warning, reading more ({0:d}) than input picture height ({1:d})'
@@ -397,17 +378,16 @@ Device Size: {6:s}
                 ).format(x, picture_height))
             return bytearray([0xff]*self.page_size)
 
-        pic.seek(x*picture_width, SEEK_CUR) # We want to skip header
-        pic.seek(y, SEEK_CUR)
+        pic.seek(y*picture_width + x, SEEK_CUR) # We want to skip header
 
-        amount_to_read = picture_width - x
-        if amount_to_read > self.page_size:
-            amount_to_read = self.page_size
+        amount_to_read = self.page_size
+        if x + self.page_size > picture_width:
+            amount_to_read = picture_width
 
         data = pic.read(amount_to_read)
-        return data.ljust(self.page_size, b'\xff')
+        return bytearray(data.ljust(self.page_size, b'\xff'))
 
-    def WritePGMToFlash(self, filename):
+    def WritePGMToFlash(self, filename, start_page=0, end_page=None):
         """Writes a picture to the NAND.
 
         Args:
@@ -415,37 +395,53 @@ Device Size: {6:s}
         Raises:
             errors.YandException: if something goes wrong.
         """
+        header_length = 0
+        if not end_page:
+            end_page = self.GetTotalPages()
         with open(filename, 'rb') as source_pic:
             magic = source_pic.read(3)
             if magic != b'P5\x0a':
                 raise errors.YandException(
-                    'Input file {0:s} is not a PGM picture (bad magic)'.format(filename))
+                    'Input file {0:s} is not a PGM picture (bad magic \'{1!s}\')'.format(
+                        filename, magic))
+            header_length += 3
             comment = b''
             bb = source_pic.read(1)
+            header_length += 1
             while bb != b'\x0a':
                 # Comment
                 comment += bb
                 bb = source_pic.read(1)
-            if source_pic.read(1) != b'\x0a':
-                raise errors.YandException(
-                    'Input file {0:s} is not a PGM picture'.format(filename))
+                header_length += 1
+            while source_pic.read(1) == b'\x0a':
+                header_length += 1
+            source_pic.seek(-1, SEEK_CUR)
             dimensions = b''
             bb = source_pic.read(1)
             while bb != b'\x0a':
                 dimensions += bb
                 bb = source_pic.read(1)
+            header_length += len(dimensions) + 1
             picture_width, picture_height = [int(d) for d in dimensions.split(b' ')]
             if source_pic.read(4) != b'255\x0a':
                 raise errors.YandException((
                     'Input file {0:s} is not a PGM picture '
                     '(should have 255 as max value)').format(filename))
-            header_length = 3 + len(comment) + 1 + 1 + len(dimensions)+ 4
+            header_length += 4
+
+            progress_bar = tqdm(
+                total=(end_page - start_page) * self.page_size,
+                unit_scale=True,
+                unit_divisor=1024,
+                unit='B'
+            )
             x = 0
             y = 0
-            for page_number in range(self.pages_per_block * self.number_of_blocks):
-                source_pic.seek(header_length)
+            for page_number in range(start_page, end_page):
+                source_pic.seek(header_length, SEEK_SET)
                 data = self.ReadPageFromPic(source_pic, picture_width, picture_height, x, y)
                 self.WritePage(page_number, data)
+                progress_bar.update(self.page_size)
                 y += 1
                 if y == picture_height:
                     x += self.page_size
