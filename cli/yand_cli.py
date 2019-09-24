@@ -33,6 +33,8 @@ class YandCli:
             help='File to write to, or read from. "-" means stdin/stdout')
         self.parser.add_argument(
             '--write_value', action='store', help='Fill with this value.')
+        self.parser.add_argument(
+            '--write_pgm', action='store_true', help='Use .pgm source image file.')
 
         self.parser.add_argument(
             '-P', '--page_size', action='store',
@@ -96,8 +98,10 @@ class YandCli:
         elif options.write_value:
             ftdi_nand.FillWithValue(
                 int(options.write_value), start=options.start, end=options.end)
+        elif options.write_pgm:
+            ftdi_nand.WritePGMToFlash(options.file)
 
 
 if __name__ == "__main__":
-    cli = YandCli()
-    cli.Main()
+    C = YandCli()
+    C.Main()
