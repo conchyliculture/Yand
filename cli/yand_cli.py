@@ -1,5 +1,6 @@
 """CLI tool for yand module"""
 import argparse
+import logging
 import sys
 
 from yand import __version__
@@ -7,6 +8,7 @@ from yand import __version__
 from yand import nand_interface
 from yand import errors
 
+logging.basicConfig(filename='/tmp/yand.log', level=logging.DEBUG)
 
 class YandCli:
     """Tool to use the Yand module"""
@@ -49,7 +51,7 @@ class YandCli:
             help=('Set a start bound for the operation. This bound is included.'
                   '(for a READ operation, te unit is a page, a block for writing/erase'))
         self.parser.add_argument(
-            '--end', action='store', type=int, default=-1,
+            '--end', action='store', type=int, default=None,
             help=('Set a end number for the operation. This bound is excluded.'
                   '(for a READ operation, te unit is a page, a block for writing/erase'))
 
@@ -90,16 +92,20 @@ class YandCli:
             print(ftdi_nand.GetInfos())
 
         if options.read:
-            ftdi_nand.DumpFlashToFile(options.file, start=int(options.start), end=int(options.end))
+            logging.debug('Starting a read operation (start={0:d}, end={1:d})'.format(options.start, options.end or -1))
+            ftdi_nand.DumpFlashToFile(options.file, start_page=options.start, end_page=options.end)
         elif options.write:
             ftdi_nand.WriteFileToFlash(options.file)
         elif options.erase:
-            ftdi_nand.Erase(start=options.start, end=options.end)
+            logging.debug('Starting an erase operation (start={0:d}, end={1:d})'.format(options.start, options.end or -1))
+            ftdi_nand.Erase(start_block=options.start, end_block=options.end)
         elif options.write_value:
+            logging.debug('Starting a fill value operation (start={0:d}, end={1:d})'.format(options.start, options.end or -1))
             ftdi_nand.FillWithValue(
                 int(options.write_value), start=options.start, end=options.end)
         elif options.write_pgm:
-            ftdi_nand.WritePGMToFlash(options.file)
+            logging.debug('Starting a write pgm operation (start={0:d}, end={1:d})'.format(options.start, options.end or -1))
+            ftdi_nand.WritePGMToFlash(options.file, start_page=options.start, end_page=options.end)
 
 
 if __name__ == "__main__":
