@@ -45,7 +45,9 @@ class FtdiDevice:
             self.ftdi.write_data(bytearray([ftdi.Ftdi.GET_BITS_HIGH]))
             data = self.ftdi.read_data_bytes(1)
             if not data:
-                raise errors.YandException('FTDI device not responding. Try restarting it.')
+                data = self.ftdi.read_data_bytes(1)
+                if not data:
+                    raise errors.YandException('FTDI device not responding. Try restarting it.')
             if data[0]&2 == 0x2:
                 break
 
