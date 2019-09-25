@@ -1,7 +1,5 @@
 """Module to talk to a NAND"""
 
-from io import BytesIO
-from io import SEEK_CUR, SEEK_SET
 import logging
 import os
 import sys
@@ -9,27 +7,8 @@ from tqdm import tqdm
 
 from yand import errors
 from yand import ftdi_device
+from yand import helpers
 
-logging.basicConfig(filename='/tmp/yand.log', level=logging.INFO)
-
-
-class RingBytesIO(BytesIO):
-    """Implements a 'ring' BytesIO, that starts from the beggining of the buffer when
-    the end is reached."""
-
-    def seek(self, offset, whence):
-        super().seek(offset % len(self.getvalue()), whence)
-
-    def read(self, l):
-        res = b''
-        while len(res) < l:
-            bytes_left = l - len(res)
-            r = super().read(bytes_left)
-            res += r
-            if len(r) < bytes_left:
-                self.seek(0, SEEK_SET)
-                res += super().read(l - len(res))
-        return res
 
 class NandInterface:
     """Class to operate on a NAND Flash"""
@@ -52,6 +31,8 @@ class NandInterface:
     def __init__(self):
         """Initializes a NandInterface object"""
         self.ftdi_device = None
+
+        self.logger = logging.getLogger()
 
         # Flash geometry / config
         self.address_cycles = 5
@@ -236,14 +217,15 @@ Device Size: {6:s}
         self.SendCommand(self.NAND_CMD_ERASE_START)
         self.ftdi_device.WaitReady()
         self.ftdi_device.write_protect = True
-        logging.debug('erased block {0:d}'.format(block))
+        self.logger.debug('erased block {0:d}'.format(block))
 
-    def WritePage(self, page_number, data):
+    def WritePage(self, page_number, data, check=False):
         """Writes a page to the NAND Flash
 
         Args:
             page_number(int): the number of the page.
             data(bytearray): the data to program.
+            check(bool): whether we re-read the written page to check.
         Raises:
             errors.YandException: if trying to write more data than a block length.
         """
@@ -263,7 +245,15 @@ Device Size: {6:s}
         self.SendCommand(self.NAND_CMD_PROG_PAGE_START)
         self.ftdi_device.WaitReady()
         self.CheckStatus()
-        logging.debug('written page {0:d} (addr: {1:d})'.format(page_number, page_address))
+        self.logger.debug('written page {0:d} (addr: {1:d})'.format(page_number, page_address))
+
+        if check:
+            data_read = self.ReadPage(page_number)
+            diff = helpers.Diff(data, data_read)
+            if diff != 0:
+                self.logger.debug(
+                    'data written & data read differ by {0:d} bytes at page {1:d}'.format(
+                        diff, page_number))
 
         self.ftdi_device.write_protect = True
 
@@ -323,7 +313,6 @@ Device Size: {6:s}
             self.WritePage(page_number, bytearray([value]*self.page_size))
             progress_bar.update(self.page_size)
 
-
     def WriteFileToFlash(self, filename):
         """Overwrite file to NAND Flash.
 
@@ -338,8 +327,9 @@ Device Size: {6:s}
                 'Input file is {0:d} bytes, more than the current NAND Flash size ({1:d})'.format(
                     filesize, self.GetTotalSize()))
         if filesize < self.GetTotalSize():
-            print('input file is {0:d}, less than the current NAND Flash size ({1:d})'.format(
-                filesize, self.GetTotalSize()))
+            self.logger.debug(
+                'input file is {0:d}, less than the current NAND Flash size ({1:d})'.format(
+                    filesize, self.GetTotalSize()))
 
         progress_bar = tqdm(
             total=self.GetTotalSize(),
@@ -353,96 +343,33 @@ Device Size: {6:s}
                 self.WritePage(page_number, page_data)
                 progress_bar.update(self.page_size)
 
-    def ReadPageFromPic(self, pic, picture_width, picture_height, x=0, y=0):
-        """Returns data from a pgm file at a specific offset, that's one page length.
-
-        Args:
-            pic(file): the opened file like object
-            picture_width(int): the width of the input picture
-            picture_height(int): the height of the input picture
-            x(int): the position in width starting from top.
-            y(int): position in height starting from top.
-        Returns:
-            bytearray: the data read from the picture, padded with 0xFF
-        """
-        if y > picture_height:
-            print((
-                'warning, reading more ({0:d}) than input picture height ({1:d})'
-                'returning 0xFFs'
-                ).format(y, picture_height))
-            return bytearray([0xff]*self.page_size)
-        if x > picture_width:
-            print((
-                'warning, reading more ({0:d}) than input picture width ({1:d})'
-                'returning 0xFFs'
-                ).format(x, picture_height))
-            return bytearray([0xff]*self.page_size)
-
-        pic.seek(y*picture_width + x, SEEK_CUR) # We want to skip header
-
-        amount_to_read = self.page_size
-        if x + self.page_size > picture_width:
-            amount_to_read = picture_width
-
-        data = pic.read(amount_to_read)
-        return bytearray(data.ljust(self.page_size, b'\xff'))
-
-    def WritePGMToFlash(self, filename, start_page=0, end_page=None):
+    def WritePGMToFlash(self, filename, wrap=True, start_page=0, end_page=None):
         """Writes a picture to the NAND.
 
         Args:
             filename(str): the path to the file to write.
+            wrap(bool): whether to keep re-writing the picture until the end page.
+            start_page(int): Page to start writing at.
+            end_page(int): Page to stop dumping at. Default is to the end.
         Raises:
             errors.YandException: if something goes wrong.
         """
-        header_length = 0
         if not end_page:
             end_page = self.GetTotalPages()
-        with open(filename, 'rb') as source_pic:
-            magic = source_pic.read(3)
-            if magic != b'P5\x0a':
-                raise errors.YandException(
-                    'Input file {0:s} is not a PGM picture (bad magic \'{1!s}\')'.format(
-                        filename, magic))
-            header_length += 3
-            comment = b''
-            bb = source_pic.read(1)
-            header_length += 1
-            while bb != b'\x0a':
-                # Comment
-                comment += bb
-                bb = source_pic.read(1)
-                header_length += 1
-            while source_pic.read(1) == b'\x0a':
-                header_length += 1
-            source_pic.seek(-1, SEEK_CUR)
-            dimensions = b''
-            bb = source_pic.read(1)
-            while bb != b'\x0a':
-                dimensions += bb
-                bb = source_pic.read(1)
-            header_length += len(dimensions) + 1
-            picture_width, picture_height = [int(d) for d in dimensions.split(b' ')]
-            if source_pic.read(4) != b'255\x0a':
-                raise errors.YandException((
-                    'Input file {0:s} is not a PGM picture '
-                    '(should have 255 as max value)').format(filename))
-            header_length += 4
 
-            progress_bar = tqdm(
-                total=(end_page - start_page) * self.page_size,
-                unit_scale=True,
-                unit_divisor=1024,
-                unit='B'
-            )
-            x = 0
-            y = 0
+        progress_bar = tqdm(
+            total=(end_page - start_page) * self.page_size,
+            unit_scale=True,
+            unit_divisor=1024,
+            unit='B'
+        )
+        x = 0
+        y = 0
+        with helpers.PGMReader(filename) as picture:
             for page_number in range(start_page, end_page):
-                source_pic.seek(header_length, SEEK_SET)
-                data = self.ReadPageFromPic(source_pic, picture_width, picture_height, x, y)
-                self.WritePage(page_number, data)
+                data = picture.Read(x, y, self.page_size)
+                self.WritePage(page_number, data, check=True)
                 progress_bar.update(self.page_size)
                 y += 1
-                if y == picture_height:
-                    x += self.page_size
+                if y == picture.height and wrap:
                     y = 0
