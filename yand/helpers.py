@@ -107,9 +107,9 @@ class PGMReader:
         if y > self.height:
             logging.debug((
                 'warning, reading more ({0:d}) than input picture height ({1:d})'
-                'returning 0xFFs'
+                'returning 0x55s'
                 ).format(y, self.height))
-            return bytearray([0xff]*length)
+            return bytearray([0x55]*length)
         if x > self.width:
             logging.debug((
                 'warning, reading more ({0:d}) than input picture width ({1:d})'

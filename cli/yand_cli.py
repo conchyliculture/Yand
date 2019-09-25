@@ -37,7 +37,7 @@ class YandCli:
             '-f', '--file', action='store',
             help='File to write to, or read from. "-" means stdin/stdout')
         self.parser.add_argument(
-            '--write_value', action='store', help='Fill with this value.')
+            '--write_value', action='store', help='Fill with this value.', type=int)
         self.parser.add_argument(
             '--write_pgm', action='store_true', help='Use .pgm source image file.')
 
@@ -48,6 +48,9 @@ class YandCli:
             '-B', '--pages_per_block', action='store', help='Specify the number of pages per block')
         self.parser.add_argument(
             '-K', '--number_of_blocks', action='store', help='Specify the number blocks')
+        self.parser.add_argument(
+            '-C', '--write_check', action='store_true',
+            help='Set if you want every written page to be re-read and checked.')
 
         self.parser.add_argument(
             '--start', action='store', type=int, default=0,
@@ -98,27 +101,33 @@ class YandCli:
 
         if options.read:
             logging.debug(
-                'Starting a read operation (start={0:d}, end={1:d})'.format(
-                    options.start, options.end or -1))
+                'Starting a read operation (start={0:d}, end={1:d}, destination={2:s})'.format(
+                    options.start, options.end or -1, options.file))
             ftdi_nand.DumpFlashToFile(options.file, start_page=options.start, end_page=options.end)
         elif options.write:
-            ftdi_nand.WriteFileToFlash(options.file)
+            logging.debug(
+                'Starting an Dump write operation with file {0:s}'.format(
+                    options.file))
+            ftdi_nand.WriteFileToFlash(options.file, write_check=options.write_check)
         elif options.erase:
             logging.debug(
                 'Starting an erase operation (start={0:d}, end={1:d})'.format(
                     options.start, options.end or -1))
             ftdi_nand.Erase(start_block=options.start, end_block=options.end)
-        elif options.write_value:
+        elif options.write_value is not None:
             logging.debug(
-                'Starting a fill value operation (start={0:d}, end={1:d})'.format(
-                    options.start, options.end or -1))
+                'Starting a fill value operation (start={0:d}, end={1:d}, value={2:d})'.format(
+                    options.start, options.end or -1, options.write_value))
             ftdi_nand.FillWithValue(
-                int(options.write_value), start=options.start, end=options.end)
+                options.write_value, start_page=options.start, end_page=options.end,
+                write_check=options.write_check)
         elif options.write_pgm:
             logging.debug(
-                'Starting a write pgm operation (start={0:d}, end={1:d})'.format(
-                    options.start, options.end or -1))
-            ftdi_nand.WritePGMToFlash(options.file, start_page=options.start, end_page=options.end)
+                'Starting a write pgm operation (start={0:d}, end={1:d}, pgm_file={2:s})'.format(
+                    options.start, options.end or -1, options.file))
+            ftdi_nand.WritePGMToFlash(
+                options.file, start_page=options.start, end_page=options.end,
+                write_check=options.write_check)
 
 
 if __name__ == "__main__":

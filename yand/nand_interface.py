@@ -160,7 +160,7 @@ Device Size: {6:s}
                 sys.stdout.buffer.write(self.ReadPage(page))
         else:
             progress_bar = tqdm(
-                total=self.GetTotalPages() * self.page_size,
+                total=(end_page - start_page) * self.page_size,
                 unit_scale=True,
                 unit_divisor=1024,
                 unit='B'
@@ -219,13 +219,13 @@ Device Size: {6:s}
         self.ftdi_device.write_protect = True
         self.logger.debug('erased block {0:d}'.format(block))
 
-    def WritePage(self, page_number, data, check=False):
+    def WritePage(self, page_number, data, write_check=False):
         """Writes a page to the NAND Flash
 
         Args:
             page_number(int): the number of the page.
             data(bytearray): the data to program.
-            check(bool): whether we re-read the written page to check.
+            write_check(bool): Whether to check every page written by reading it.
         Raises:
             errors.YandException: if trying to write more data than a block length.
         """
@@ -238,16 +238,18 @@ Device Size: {6:s}
         page_address = page_number << 16
 
         self.SendCommand(self.NAND_CMD_PROG_PAGE)
-        self.ftdi_device.WaitReady()
+        # I've had good results when keeping just one "WaitReady" here.
+        # Feel free to uncomment if your writes are not super clean
+#        self.ftdi_device.WaitReady()
         self.SendAddress(page_address, self.address_cycles)
-        self.ftdi_device.WaitReady()
+#        self.ftdi_device.WaitReady()
         self.ftdi_device.Write(data)
         self.SendCommand(self.NAND_CMD_PROG_PAGE_START)
         self.ftdi_device.WaitReady()
         self.CheckStatus()
         self.logger.debug('written page {0:d} (addr: {1:d})'.format(page_number, page_address))
 
-        if check:
+        if write_check:
             data_read = self.ReadPage(page_number)
             diff = helpers.Diff(data, data_read)
             if diff != 0:
@@ -260,7 +262,10 @@ Device Size: {6:s}
     def CheckStatus(self):
         """Check the status of the last operation."""
         self.SendCommand(self.NAND_CMD_STATUS)
-        status = self.ftdi_device.Read(1)[0]
+        status_bytes = self.ftdi_device.Read(1)
+        while not status_bytes:
+            status_bytes = self.ftdi_device.Read(1)
+        status = status_bytes[0]
         if (status & 0x2) == 0x2 and (status & 0x20 == 0x20):
             # applies to PROGRAM-, and COPYBACK PROGRAM-series operations
             raise errors.StatusProgramError('Status is {0:s}'.format(status.hex()))
@@ -288,36 +293,34 @@ Device Size: {6:s}
             self.EraseBlock(block)
             progress_bar.update(self.page_size * self.pages_per_block)
 
-    def FillWithValue(self, value, start=0, end=None):
+    def FillWithValue(self, value, start_page=0, end_page=None, write_check=False):
         """Fill NAND flash pages with a specific value.
 
         Args:
             value(int): the value to write.
-            start(int): the first page to write.
-            end(int): write pages until this one (excluded).
+            start_page(int): the first page to write.
+            end_page(int): write pages until this one (excluded).
+            write_check(bool): Whether to check every page written.
         """
-        total_size = self.GetTotalSize()
-
-        if end == -1:
-            end = int(total_size / self.page_size)
-        else:
-            total_size = (end - start) * self.page_size
+        if not end_page:
+            end_page = self.GetTotalPages()
 
         progress_bar = tqdm(
-            total=total_size,
+            total=(end_page - start_page) * self.page_size,
             unit_scale=True,
             unit_divisor=1024,
             unit='B'
         )
-        for page_number in range(start, end or self.GetTotalPages()):
-            self.WritePage(page_number, bytearray([value]*self.page_size))
+        for page_number in range(start_page, end_page):
+            self.WritePage(page_number, bytearray([value]*self.page_size), write_check=write_check)
             progress_bar.update(self.page_size)
 
-    def WriteFileToFlash(self, filename):
+    def WriteFileToFlash(self, filename, write_check=False):
         """Overwrite file to NAND Flash.
 
         Args:
             filename(str): path to the dump to write.
+            write_check(bool): Whether to check every page written.
         Raises:
             errors.YandException: if filename has more data than the NAND Flash.
         """
@@ -340,10 +343,10 @@ Device Size: {6:s}
         with open(filename, 'rb') as input_file:
             for page_number in range(self.GetTotalPages()):
                 page_data = input_file.read(self.page_size)
-                self.WritePage(page_number, page_data)
+                self.WritePage(page_number, page_data, write_check=write_check)
                 progress_bar.update(self.page_size)
 
-    def WritePGMToFlash(self, filename, wrap=True, start_page=0, end_page=None):
+    def WritePGMToFlash(self, filename, wrap=True, start_page=0, end_page=None, write_check=False):
         """Writes a picture to the NAND.
 
         Args:
@@ -351,6 +354,7 @@ Device Size: {6:s}
             wrap(bool): whether to keep re-writing the picture until the end page.
             start_page(int): Page to start writing at.
             end_page(int): Page to stop dumping at. Default is to the end.
+            write_check(bool): Whether to check every page written.
         Raises:
             errors.YandException: if something goes wrong.
         """
@@ -368,7 +372,7 @@ Device Size: {6:s}
         with helpers.PGMReader(filename) as picture:
             for page_number in range(start_page, end_page):
                 data = picture.Read(x, y, self.page_size)
-                self.WritePage(page_number, data, check=True)
+                self.WritePage(page_number, data, write_check=write_check)
                 progress_bar.update(self.page_size)
                 y += 1
                 if y == picture.height and wrap:
