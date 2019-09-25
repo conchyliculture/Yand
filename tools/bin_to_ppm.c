@@ -83,6 +83,7 @@ int main(int argc, char **argv) {
   res = stat(inputfile_path, &st);
   if (res != 0) {
       printf("ERROR: can't read input file size: '%s'\n", inputfile_path);
+      printf("Reason : %s\n", strerror(errno));
       return EXIT_FAILURE;
   }
 
