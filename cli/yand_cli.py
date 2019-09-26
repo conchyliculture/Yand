@@ -9,15 +9,18 @@ from yand import __version__
 from yand import nand_interface
 from yand import errors
 
-def Confirm(message):
+def Confirm(message, yes=False):
     """Asks the user for a confirmation.
 
     Args:
         message(str): the message to display.
+        yes(bool): always return True.
 
     Returns:
         bool: whether the user confirms.
     """
+    if yes:
+        return True
 
     answer = None
     while answer not in ['y', 'n', '']:
@@ -46,6 +49,7 @@ class YandCli:
         """
         self.parser = argparse.ArgumentParser()
         self.parser.add_argument('-V', '--version', action='store_true', help='show version')
+        self.parser.add_argument('-y', '--yes', action='store_true', help='don\'t ask for conformation')
 
         self.parser.add_argument(
             '-l', '--logfile', action='store', default='yand.log',
@@ -145,21 +149,22 @@ class YandCli:
                     options.start, options.end or -1, options.file))
             if os.path.exists(options.file):
                 if not Confirm(
-                        'Destination file {0:s} already exists. Proceed?'.format(options.file)):
+                        'Destination file {0:s} already exists. Proceed?'.format(options.file),
+                        options.yes):
                     Die()
 
             ftdi_nand.DumpFlashToFile(options.file, start_page=options.start, end_page=options.end)
         elif options.write:
             if not Confirm(
                     'About to write the content of "{0:s}" to NAND Flash. Proceed?'.format(
-                        options.file)):
+                        options.file), options.yes):
                 Die()
             logging.debug(
                 'Starting an Dump write operation with file {0:s}'.format(
-                    options.file))
+                    options.file), options.yes)
             ftdi_nand.WriteFileToFlash(options.file, write_check=options.write_check)
         elif options.erase:
-            if not Confirm('About to erase NAND Flash blocks. Proceed?'):
+            if not Confirm('About to erase NAND Flash blocks. Proceed?', options.yes):
                 Die()
             logging.debug(
                 'Starting an erase operation (start={0:d}, end={1:d})'.format(
@@ -168,7 +173,7 @@ class YandCli:
         elif options.write_value is not None:
             if not Confirm(
                     'About to write value {0:d} in NAND Flash. Proceed?'.format(
-                        options.write_value)):
+                        options.write_value), options.yes):
                 Die()
             logging.debug(
                 'Starting a fill value operation (start={0:d}, end={1:d}, value={2:d})'.format(
@@ -179,7 +184,7 @@ class YandCli:
         elif options.write_pgm:
             if not Confirm(
                     'About to write content of {0:s} in NAND Flash. Proceed?'.format(
-                        options.file)):
+                        options.file), options.yes):
                 sys.exit(1)
             logging.debug(
                 'Starting a write pgm operation (start={0:d}, end={1:d}, pgm_file={2:s})'.format(
