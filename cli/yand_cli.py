@@ -1,6 +1,7 @@
 """CLI tool for yand module"""
 import argparse
 import logging
+import os
 import sys
 
 from yand import __version__
@@ -8,13 +9,34 @@ from yand import __version__
 from yand import nand_interface
 from yand import errors
 
+def Confirm(message):
+    """Asks the user for a confirmation.
+
+    Args:
+        message(str): the message to display.
+
+    Returns:
+        bool: whether the user confirms.
+    """
+
+    answer = None
+    while answer not in ['y', 'n', '']:
+        answer = input('{0:s} [y/N]'.format(message)).lower()
+    return answer == 'y'
+
+
+def Die(message='Aborting', error_code=1):
+    """Prints a message and quits."""
+    print(message)
+    sys.exit(error_code)
+
 
 class YandCli:
     """Tool to use the Yand module"""
+
     def __init__(self):
         """Initializes a YandCli object."""
         self.parser = None
-
 
     def ParseArguments(self):
         """Parses arguments.
@@ -74,10 +96,13 @@ class YandCli:
 
     def Main(self):
         """Main function"""
+
         options = self.ParseArguments()
+
         if options.version:
             print('{0:s}: {1:s}'.format(__file__, __version__))
             sys.exit(0)
+
         if options.logfile:
             logging.basicConfig(
                 filename=options.logfile,
@@ -92,7 +117,7 @@ class YandCli:
             self.parser.print_help()
             raise errors.YandException('Need a source to read from')
 
-
+        # Set up geometry
         if options.page_size:
             try:
                 page_size, oob_size = [
@@ -118,18 +143,33 @@ class YandCli:
             logging.debug(
                 'Starting a read operation (start={0:d}, end={1:d}, destination={2:s})'.format(
                     options.start, options.end or -1, options.file))
+            if os.path.exists(options.file):
+                if not Confirm(
+                        'Destination file {0:s} already exists. Proceed?'.format(options.file)):
+                    Die()
+
             ftdi_nand.DumpFlashToFile(options.file, start_page=options.start, end_page=options.end)
         elif options.write:
+            if not Confirm(
+                    'About to write the content of "{0:s}" to NAND Flash. Proceed?'.format(
+                        options.file)):
+                Die()
             logging.debug(
                 'Starting an Dump write operation with file {0:s}'.format(
                     options.file))
             ftdi_nand.WriteFileToFlash(options.file, write_check=options.write_check)
         elif options.erase:
+            if not Confirm('About to erase NAND Flash blocks. Proceed?'):
+                Die()
             logging.debug(
                 'Starting an erase operation (start={0:d}, end={1:d})'.format(
                     options.start, options.end or -1))
             ftdi_nand.Erase(start_block=options.start, end_block=options.end)
         elif options.write_value is not None:
+            if not Confirm(
+                    'About to write value {0:d} in NAND Flash. Proceed?'.format(
+                        options.write_value)):
+                Die()
             logging.debug(
                 'Starting a fill value operation (start={0:d}, end={1:d}, value={2:d})'.format(
                     options.start, options.end or -1, options.write_value))
@@ -137,6 +177,10 @@ class YandCli:
                 options.write_value, start_page=options.start, end_page=options.end,
                 write_check=options.write_check)
         elif options.write_pgm:
+            if not Confirm(
+                    'About to write content of {0:s} in NAND Flash. Proceed?'.format(
+                        options.file)):
+                sys.exit(1)
             logging.debug(
                 'Starting a write pgm operation (start={0:d}, end={1:d}, pgm_file={2:s})'.format(
                     options.start, options.end or -1, options.file))
