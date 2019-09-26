@@ -23,43 +23,51 @@ class YandCli:
             argparse.NameSpace: the parsed options.
         """
         self.parser = argparse.ArgumentParser()
+        self.parser.add_argument('-V', '--version', action='store_true', help='show version')
 
         self.parser.add_argument(
             '-l', '--logfile', action='store', default='yand.log',
-            help='Log debug information to a file')
-        self.parser.add_argument('-V', '--version', action='store_true', help='Show version')
-        self.parser.add_argument('-r', '--read', action='store_true', help='Read all NAND Flash')
-        self.parser.add_argument(
-            '-w', '--write', action='store_true', help='Write NAND from a raw dump')
-        self.parser.add_argument(
-            '-e', '--erase', action='store_true', help='Erase blocks')
-        self.parser.add_argument(
-            '-f', '--file', action='store',
-            help='File to write to, or read from. "-" means stdin/stdout')
-        self.parser.add_argument(
-            '--write_value', action='store', help='Fill with this value.', type=int)
-        self.parser.add_argument(
-            '--write_pgm', action='store_true', help='Use .pgm source image file.')
-
-        self.parser.add_argument(
-            '-P', '--page_size', action='store',
-            help='Specify page size  & OOB size in bytes, ie: "2048,128"')
-        self.parser.add_argument(
-            '-B', '--pages_per_block', action='store', help='Specify the number of pages per block')
-        self.parser.add_argument(
-            '-K', '--number_of_blocks', action='store', help='Specify the number blocks')
+            help='log debug information to the specified file')
         self.parser.add_argument(
             '-C', '--write_check', action='store_true',
-            help='Set if you want every written page to be re-read and checked.')
+            help='read page after each page write operation')
+        self.parser.add_argument(
+            '-f', '--file', action='store',
+            help='file to write to, or read from. "-" means stdin/stdout')
 
-        self.parser.add_argument(
+        functional_group = self.parser.add_argument_group(
+            'Function Options', 'Specify what operation to run.')
+        functional_group.add_argument(
+            '-r', '--read', action='store_true', help='read all NAND Flash')
+        functional_group.add_argument(
+            '-w', '--write', action='store_true', help='write NAND from a raw dump')
+        functional_group.add_argument(
+            '-e', '--erase', action='store_true', help='erase blocks')
+        functional_group.add_argument(
+            '--write_value', action='store', help='fill the NAND with this value.', type=int)
+        functional_group.add_argument(
+            '--write_pgm', action='store_true',
+            help='use a .pgm source image file. Will write the image over and over until the end.')
+        functional_group.add_argument(
             '--start', action='store', type=int, default=0,
-            help=('Set a start bound for the operation. This bound is included.'
-                  '(for a READ operation, te unit is a page, a block for writing/erase'))
-        self.parser.add_argument(
+            help=('Set a start bound for the operation. This bound is included:  range(start, end)'
+                  '(for a read or write operation, the unit is a page, for Erase, it is a block'))
+        functional_group.add_argument(
             '--end', action='store', type=int, default=None,
-            help=('Set a end number for the operation. This bound is excluded.'
-                  '(for a READ operation, te unit is a page, a block for writing/erase'))
+            help=('Set a end number for the operation. This bound is excluded: range(start, end)'
+                  '(for a read or write operation, the unit is a page, for Erase, it is a block'))
+
+        geometry_group = self.parser.add_argument_group(
+            'Geometry options',
+            'Specify the geometry of the NAND flash if it can\'t be detected via ONFI.')
+        geometry_group.add_argument(
+            '-P', '--page_size', action='store',
+            help='specify page size and OOB size in bytes, with the format: "2048,128"')
+        geometry_group.add_argument(
+            '-B', '--pages_per_block', action='store', help='number of pages per block')
+        geometry_group.add_argument(
+            '-K', '--number_of_blocks', action='store', help='total number of blocks')
+
 
         args = self.parser.parse_args()
         return args
@@ -71,7 +79,12 @@ class YandCli:
             print('{0:s}: {1:s}'.format(__file__, __version__))
             sys.exit(0)
         if options.logfile:
-            logging.basicConfig(filename=options.logfile, level=logging.DEBUG)
+            logging.basicConfig(
+                filename=options.logfile,
+                level=logging.DEBUG,
+                format='%(asctime)s %(message)s',
+                datefmt='[%Y-%m-%d %H:%M:%S]'
+            )
 
         ftdi_nand = nand_interface.NandInterface()
 
@@ -95,9 +108,11 @@ class YandCli:
             ftdi_nand.number_of_blocks = int(options.number_of_blocks)
 
         ftdi_nand.Setup()
+        infos = 'Chip info: '+ftdi_nand.GetInfos()
+        logging.debug(infos)
 
         if not options.file == '-':
-            print(ftdi_nand.GetInfos())
+            print(infos)
 
         if options.read:
             logging.debug(
