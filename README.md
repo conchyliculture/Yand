@@ -2,6 +2,8 @@
 
 No-bullshit NAND Flash dumper / reader using PyFTDI to harness glorious FT2232H BitBanging
 
+Mandatory warning: *I am NOT responsible to any damage done to your data and/or devices*
+
 ## What YAND is
 
 YAND aims at making it easy to copy all data from a NAND flash into a file, or the other way around.
@@ -18,7 +20,11 @@ The Hardware used is the same as that project. More information regarding the Na
 
 It is *NOT* going to do your homework trying to figure out NAND flash geometry.
 
-While it supports ONFI autodetection, if this isn't offered by your chip, you're on your own to hunt for these delicious datasheet.
+While it supports [ONFI](http://www.onfi.org/) autodetection, if this isn't offered by your chip, you're on your own to hunt for these delicious datasheet.
+
+It is NOT going to be smart in anyway, trying to avoid bad blocks or calculate ECC for you. That is your problem.
+
+It is also NOT fast... Expected speeds are ~100kbps for reading & writing pages. Expect a couple hours to dump a whole 1GiB chip.
 
 ## Installation
 
