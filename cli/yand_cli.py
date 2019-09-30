@@ -160,8 +160,8 @@ class YandCli:
                         options.file), options.yes):
                 Die()
             logging.debug(
-                'Starting an Dump write operation with file {0:s}'.format(
-                    options.file), options.yes)
+                'Starting an Dump write operation with file {0:s} (write check is {1!s})'.format(
+                    options.file, options.write_check), options.yes)
             ftdi_nand.WriteFileToFlash(options.file, write_check=options.write_check)
         elif options.erase:
             if not Confirm('About to erase NAND Flash blocks. Proceed?', options.yes):
@@ -176,8 +176,9 @@ class YandCli:
                         options.write_value), options.yes):
                 Die()
             logging.debug(
-                'Starting a fill value operation (start={0:d}, end={1:d}, value={2:d})'.format(
-                    options.start, options.end or -1, options.write_value))
+                'Starting a fill value operation '
+                '(start={0:d}, end={1:d}, value={2:d}, write check is {3!s})'.format(
+                    options.start, options.end or -1, options.write_value, options.write_check))
             ftdi_nand.FillWithValue(
                 options.write_value, start_page=options.start, end_page=options.end,
                 write_check=options.write_check)
@@ -187,8 +188,9 @@ class YandCli:
                         options.file), options.yes):
                 sys.exit(1)
             logging.debug(
-                'Starting a write pgm operation (start={0:d}, end={1:d}, pgm_file={2:s})'.format(
-                    options.start, options.end or -1, options.file))
+                'Starting a write pgm operation '
+                '(start={0:d}, end={1:d}, pgm_file={2:s}, write check is {3!s})'.format(
+                    options.start, options.end or -1, options.file, options.write_check))
             ftdi_nand.WritePGMToFlash(
                 options.file, start_page=options.start, end_page=options.end,
                 write_check=options.write_check)
