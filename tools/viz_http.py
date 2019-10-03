@@ -21,8 +21,36 @@ MAIN_HTML = """
     <link crossorigin="" href="https://unpkg.com/leaflet@1.5.1/dist/leaflet.css" integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ==" rel="stylesheet" />
     <script crossorigin="" integrity="sha512-GffPMF3RvMeYyc1LWMHtK8EbPv0iNZ8/oTtHPx9/cc2ILxQ+u905qIwdpULaqDkyBKgOaB57QTMg7ztg8Jm2Og==" src="https://unpkg.com/leaflet@1.5.1/dist/leaflet.js"></script>
 </head><body>
-    <div id="mapid" style="height:400px; width: 600px"></div>
+    <div id="mapid" style="height:400px; width: 600px; cursor:crosshair"></div>
     <script>
+    function latlng_to_page_num(latlng, total_size, page_size, oob_size) {
+        var total_columns = 8;
+        var total_pages = total_size / page_size;
+        var column = Math.floor(latlng.lng / total_columns);
+        var offset_in_page = Math.floor((latlng.lng%%total_columns) * (page_size+oob_size)/total_columns);
+        var pages_per_column = total_pages / total_columns;
+        var page_num = Math.floor(((-(latlng.lat/8)) * total_pages) / 256  + column * pages_per_column);
+        var offset = (page_num)*(page_size+oob_size) + offset_in_page;
+        var res = "<ul>";
+        res += "<li> Offset in dump: " + offset + " / 0x" + offset.toString(16).toUpperCase() + "</li>"
+        res += "<li> Page Number: "+page_num+"</li>"
+        res += "<li> lat: "+latlng.lat+"</li>"
+        res += "<li> lng: "+latlng.lng+"</li>"
+//        res += "<li> column: "+column+"</li>"
+        res+="</ul>";
+        return res;
+    };
+
+    var onMapClick = function(e) {
+        if (e.latlng.lng < 0 || e.latlng.lng > 128) { return;};
+        if (e.latlng.lat > 0 || e.latlng.lat < -256) { return;};
+        var marker = L.marker(
+            [e.latlng.lat, e.latlng.lng]
+        ).addTo(map).bindPopup(
+            latlng_to_page_num(e.latlng, 1 * 1024 * 1024 * 1024, 2048, 64)
+        );
+    };
+
         var map = L.map('mapid', {
             maxZoom: 9,
             zoomControl: false,
@@ -32,6 +60,7 @@ MAIN_HTML = """
         var layer = L.tileLayer('/%s/{z}/{y}/{x}.jpg',{
             noWrap: true,
         }).addTo(map);
+        map.on('click', onMapClick);
     </script>
 </body></html>
 """%(map_id)
