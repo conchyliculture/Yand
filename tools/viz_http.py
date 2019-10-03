@@ -7,9 +7,21 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--dir', action='store', required=True, help='Tiles directory.')
+parser.add_argument(
+    '-s', '--split', type=int, action='store', required=True,
+    help='Number of splits (columns).', default=8)
+parser.add_argument(
+    '-t', '--total_size', type=int, action='store', required=True,
+    help='Total file of the original dump file')
+parser.add_argument(
+    '-p', '--page_size', type=int, action='store', required=True,
+    help='Length of a page (userdata + oob)')
 args = parser.parse_args()
 
 tiles_dir = args.dir
+nb_splits = args.split
+total_size = args.total_size
+page_size = args.page_size
 if not os.path.isdir(tiles_dir):
     print('{0:s} is not a directory'.format(tiles_dir))
     sys.exit(1)
@@ -22,33 +34,46 @@ MAIN_HTML = """
     <script crossorigin="" integrity="sha512-GffPMF3RvMeYyc1LWMHtK8EbPv0iNZ8/oTtHPx9/cc2ILxQ+u905qIwdpULaqDkyBKgOaB57QTMg7ztg8Jm2Og==" src="https://unpkg.com/leaflet@1.5.1/dist/leaflet.js"></script>
 </head><body>
     <div id="mapid" style="height:400px; width: 600px; cursor:crosshair"></div>
+    <div id="vals">
+      Lng at right of first col: <input type="text" id="onecol"><br>
+      Lat at bottom of first col: <input type="text" id="maxlat"><br>
+    </div>
     <script>
-    function latlng_to_page_num(latlng, total_size, page_size, oob_size) {
-        var total_columns = 8;
+    function getInputVal(input_id) {return parseFloat(document.getElementById(input_id).value) || -1};
+    function latlng_to_page_num(latlng, nb_cols, total_size, page_size) {
+        console.log(latlng.toString());
+        var one_col_width = getInputVal('onecol');
+        var maxlat = getInputVal('maxlat');
+        if (one_col_width==-1 || maxlat ==-1) {
+          console.log('Not enough info');
+          return "";
+        }
+        var column = Math.ceil(latlng.lng / one_col_width);
         var total_pages = total_size / page_size;
-        var column = Math.floor(latlng.lng / total_columns);
-        var offset_in_page = Math.floor((latlng.lng%%total_columns) * (page_size+oob_size)/total_columns);
-        var pages_per_column = total_pages / total_columns;
-        var page_num = Math.floor(((-(latlng.lat/8)) * total_pages) / 256  + column * pages_per_column);
-        var offset = (page_num)*(page_size+oob_size) + offset_in_page;
+        var pages_per_column = total_pages / nb_cols;
+
+        var page_num = Math.floor(pages_per_column * (column - 1) + (pages_per_column/maxlat)*latlng.lat);
+        var offset_in_page = Math.floor((latlng.lng%%one_col_width) * page_size / one_col_width);
+        var offset = Math.floor((page_num)*(page_size) + offset_in_page);
         var res = "<ul>";
+        res += "<li> Offset in page: " + offset_in_page + "</li>";
         res += "<li> Offset in dump: " + offset + " / 0x" + offset.toString(16).toUpperCase() + "</li>"
         res += "<li> Page Number: "+page_num+"</li>"
-        res += "<li> lat: "+latlng.lat+"</li>"
-        res += "<li> lng: "+latlng.lng+"</li>"
+//        res += "<li> lat: "+latlng.lat+"</li>"
+//        res += "<li> lng: "+latlng.lng+"</li>"
 //        res += "<li> column: "+column+"</li>"
         res+="</ul>";
         return res;
     };
 
     var onMapClick = function(e) {
-        if (e.latlng.lng < 0 || e.latlng.lng > 128) { return;};
+        if (e.latlng.lng < 0 || e.latlng.lng > 256) { return;};
         if (e.latlng.lat > 0 || e.latlng.lat < -256) { return;};
+        var msg =  latlng_to_page_num(e.latlng, %d, %d, %d);
+        if (msg == "") { return; }
         var marker = L.marker(
             [e.latlng.lat, e.latlng.lng]
-        ).addTo(map).bindPopup(
-            latlng_to_page_num(e.latlng, 1 * 1024 * 1024 * 1024, 2048, 64)
-        );
+        ).addTo(map).bindPopup(msg);
     };
 
         var map = L.map('mapid', {
@@ -63,7 +88,7 @@ MAIN_HTML = """
         map.on('click', onMapClick);
     </script>
 </body></html>
-"""%(map_id)
+"""%(nb_splits, total_size, page_size, map_id)
 
 class RequestHandler(BaseHTTPRequestHandler):
     """Class to handle http requests."""
