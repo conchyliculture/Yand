@@ -161,7 +161,7 @@ class YandCli:
                 Die()
             logging.debug(
                 'Starting an Dump write operation with file {0:s} (write check is {1!s})'.format(
-                    options.file, options.write_check), options.yes)
+                    options.file, options.write_check))
             ftdi_nand.WriteFileToFlash(options.file, write_check=options.write_check)
         elif options.erase:
             if not Confirm('About to erase NAND Flash blocks. Proceed?', options.yes):
