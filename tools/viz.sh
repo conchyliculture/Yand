@@ -21,6 +21,7 @@
 
 DUMP_FILEPATH=$(realpath "${1}")
 DUMP_FILENAME=$(basename "${DUMP_FILEPATH}")
+DUMP_FILESIZE=$(stat --printf='%s' "${DUMP_FILEPATH}")
 PAGE_SIZE="${2}"
 
 NUMBER_OF_SPLITS="${3}"
@@ -100,4 +101,4 @@ echo
 if [ -f ${BIG_PNG} ]; then
     echo "You might want to delete ${BIG_PNG}, it's not going to be used any more"
 fi
-python3 "${HTTP_SERV}" -d "${TILES_DIR}"
+python3 "${HTTP_SERV}" -d "${TILES_DIR}" -s ${NUMBER_OF_SPLITS} -t ${DUMP_FILESIZE} -p ${PAGE_SIZE}
