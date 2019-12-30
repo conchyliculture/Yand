@@ -1,5 +1,7 @@
 """CLI tool for yand module"""
 import argparse
+import logging
+import os
 import sys
 
 from yand import __version__
@@ -7,9 +9,34 @@ from yand import __version__
 from yand import nand_interface
 from yand import errors
 
+def Confirm(message, yes=False):
+    """Asks the user for a confirmation.
+
+    Args:
+        message(str): the message to display.
+        yes(bool): always return True.
+
+    Returns:
+        bool: whether the user confirms.
+    """
+    if yes:
+        return True
+
+    answer = None
+    while answer not in ['y', 'n', '']:
+        answer = input('{0:s} [y/N]'.format(message)).lower()
+    return answer == 'y'
+
+
+def Die(message='Aborting', error_code=1):
+    """Prints a message and quits."""
+    print(message)
+    sys.exit(error_code)
+
 
 class YandCli:
     """Tool to use the Yand module"""
+
     def __init__(self):
         """Initializes a YandCli object."""
         self.parser = None
@@ -21,45 +48,72 @@ class YandCli:
             argparse.NameSpace: the parsed options.
         """
         self.parser = argparse.ArgumentParser()
+        self.parser.add_argument('-V', '--version', action='store_true', help='show version')
+        self.parser.add_argument('-y', '--yes', action='store_true', help='don\'t ask for conformation')
 
-        self.parser.add_argument('-V', '--version', action='store_true', help='Show version')
-        self.parser.add_argument('-r', '--read', action='store_true', help='Read all NAND Flash')
         self.parser.add_argument(
-            '-w', '--write', action='store_true', help='Write NAND from a raw dump')
+            '-l', '--logfile', action='store', default='yand.log',
+            help='log debug information to the specified file')
         self.parser.add_argument(
-            '-e', '--erase', action='store_true', help='Erase blocks')
+            '-C', '--write_check', action='store_true',
+            help='read page after each page write operation')
         self.parser.add_argument(
             '-f', '--file', action='store',
-            help='File to write to, or read from. "-" means stdin/stdout')
-        self.parser.add_argument(
-            '--write_value', action='store', help='Fill with this value.')
+            help='file to write to, or read from. "-" means stdin/stdout')
 
-        self.parser.add_argument(
-            '-P', '--page_size', action='store',
-            help='Specify page size  & OOB size in bytes, ie: "2048,128"')
-        self.parser.add_argument(
-            '-B', '--pages_per_block', action='store', help='Specify the number of pages per block')
-        self.parser.add_argument(
-            '-K', '--number_of_blocks', action='store', help='Specify the number blocks')
-
-        self.parser.add_argument(
+        functional_group = self.parser.add_argument_group(
+            'Function Options', 'Specify what operation to run.')
+        functional_group.add_argument(
+            '-r', '--read', action='store_true', help='read all NAND Flash')
+        functional_group.add_argument(
+            '-w', '--write', action='store_true', help='write NAND from a raw dump')
+        functional_group.add_argument(
+            '-e', '--erase', action='store_true', help='erase blocks')
+        functional_group.add_argument(
+            '--write_value', action='store', help='fill the NAND with this value.', type=int)
+        functional_group.add_argument(
+            '--write_pgm', action='store_true',
+            help='use a .pgm source image file. Will write the image over and over until the end.')
+        functional_group.add_argument(
             '--start', action='store', type=int, default=0,
-            help=('Set a start bound for the operation. This bound is included.'
-                  '(for a READ operation, te unit is a page, a block for writing/erase'))
-        self.parser.add_argument(
-            '--end', action='store', type=int, default=-1,
-            help=('Set a end number for the operation. This bound is excluded.'
-                  '(for a READ operation, te unit is a page, a block for writing/erase'))
+            help=('Set a start bound for the operation. This bound is included:  range(start, end)'
+                  '(for a read or write operation, the unit is a page, for Erase, it is a block'))
+        functional_group.add_argument(
+            '--end', action='store', type=int, default=None,
+            help=('Set a end number for the operation. This bound is excluded: range(start, end)'
+                  '(for a read or write operation, the unit is a page, for Erase, it is a block'))
+
+        geometry_group = self.parser.add_argument_group(
+            'Geometry options',
+            'Specify the geometry of the NAND flash if it can\'t be detected via ONFI.')
+        geometry_group.add_argument(
+            '-P', '--page_size', action='store',
+            help='specify page size and OOB size in bytes, with the format: "2048,128"')
+        geometry_group.add_argument(
+            '-B', '--pages_per_block', action='store', help='number of pages per block')
+        geometry_group.add_argument(
+            '-K', '--number_of_blocks', action='store', help='total number of blocks')
+
 
         args = self.parser.parse_args()
         return args
 
     def Main(self):
         """Main function"""
+
         options = self.ParseArguments()
+
         if options.version:
             print('{0:s}: {1:s}'.format(__file__, __version__))
             sys.exit(0)
+
+        if options.logfile:
+            logging.basicConfig(
+                filename=options.logfile,
+                level=logging.DEBUG,
+                format='%(asctime)s %(message)s',
+                datefmt='[%Y-%m-%d %H:%M:%S]'
+            )
 
         ftdi_nand = nand_interface.NandInterface()
 
@@ -67,7 +121,7 @@ class YandCli:
             self.parser.print_help()
             raise errors.YandException('Need a source to read from')
 
-
+        # Set up geometry
         if options.page_size:
             try:
                 page_size, oob_size = [
@@ -83,21 +137,65 @@ class YandCli:
             ftdi_nand.number_of_blocks = int(options.number_of_blocks)
 
         ftdi_nand.Setup()
+        infos = 'Chip info: '+ftdi_nand.GetInfos()
+        logging.debug(infos)
 
         if not options.file == '-':
-            print(ftdi_nand.GetInfos())
+            print(infos)
 
         if options.read:
-            ftdi_nand.DumpFlashToFile(options.file, start=int(options.start), end=int(options.end))
+            logging.debug(
+                'Starting a read operation (start={0:d}, end={1:d}, destination={2:s})'.format(
+                    options.start, options.end or -1, options.file))
+            if os.path.exists(options.file):
+                if not Confirm(
+                        'Destination file {0:s} already exists. Proceed?'.format(options.file),
+                        options.yes):
+                    Die()
+
+            ftdi_nand.DumpFlashToFile(options.file, start_page=options.start, end_page=options.end)
         elif options.write:
-            ftdi_nand.WriteFileToFlash(options.file)
+            if not Confirm(
+                    'About to write the content of "{0:s}" to NAND Flash. Proceed?'.format(
+                        options.file), options.yes):
+                Die()
+            logging.debug(
+                'Starting an Dump write operation with file {0:s} (write check is {1!s})'.format(
+                    options.file, options.write_check), options.yes)
+            ftdi_nand.WriteFileToFlash(options.file, write_check=options.write_check)
         elif options.erase:
-            ftdi_nand.Erase(start=options.start, end=options.end)
-        elif options.write_value:
+            if not Confirm('About to erase NAND Flash blocks. Proceed?', options.yes):
+                Die()
+            logging.debug(
+                'Starting an erase operation (start={0:d}, end={1:d})'.format(
+                    options.start, options.end or -1))
+            ftdi_nand.Erase(start_block=options.start, end_block=options.end)
+        elif options.write_value is not None:
+            if not Confirm(
+                    'About to write value {0:d} in NAND Flash. Proceed?'.format(
+                        options.write_value), options.yes):
+                Die()
+            logging.debug(
+                'Starting a fill value operation '
+                '(start={0:d}, end={1:d}, value={2:d}, write check is {3!s})'.format(
+                    options.start, options.end or -1, options.write_value, options.write_check))
             ftdi_nand.FillWithValue(
-                int(options.write_value), start=options.start, end=options.end)
+                options.write_value, start_page=options.start, end_page=options.end,
+                write_check=options.write_check)
+        elif options.write_pgm:
+            if not Confirm(
+                    'About to write content of {0:s} in NAND Flash. Proceed?'.format(
+                        options.file), options.yes):
+                sys.exit(1)
+            logging.debug(
+                'Starting a write pgm operation '
+                '(start={0:d}, end={1:d}, pgm_file={2:s}, write check is {3!s})'.format(
+                    options.start, options.end or -1, options.file, options.write_check))
+            ftdi_nand.WritePGMToFlash(
+                options.file, start_page=options.start, end_page=options.end,
+                write_check=options.write_check)
 
 
 if __name__ == "__main__":
-    cli = YandCli()
-    cli.Main()
+    C = YandCli()
+    C.Main()

@@ -1,3 +1,3 @@
 """yand module"""
 
-__version__ = "20190914"
+__version__ = "20190926"
