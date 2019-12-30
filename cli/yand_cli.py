@@ -49,7 +49,8 @@ class YandCli:
         """
         self.parser = argparse.ArgumentParser()
         self.parser.add_argument('-V', '--version', action='store_true', help='show version')
-        self.parser.add_argument('-y', '--yes', action='store_true', help='don\'t ask for conformation')
+        self.parser.add_argument(
+            '-y', '--yes', action='store_true', help='don\'t ask for conformation')
 
         self.parser.add_argument(
             '-l', '--logfile', action='store', default='yand.log',
