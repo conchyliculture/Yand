@@ -5,14 +5,13 @@ import unittest
 from yand import nand_interface
 
 
-# pylint: disable=protected-access
+# pylint: disable=protected-access, line-too-long
 
 class YandTest(unittest.TestCase):
     """Tests for the device module"""
 
     def testParseONFI(self):
         """tests device.NAND."""
-        # pylint: disable=line-too-long
         fake_onfi = bytearray([
             0x4F, 0x4E, 0x46, 0x49,
             0x1E, 0x00,
