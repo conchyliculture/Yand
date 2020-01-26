@@ -144,14 +144,16 @@ class YandCli:
             print(infos)
 
         if options.read:
-            logging.debug(
-                'Starting a read operation (start={0:d}, end={1:d}, destination={2:s})'.format(
-                    options.start, options.end or -1, options.file))
+            if not options.file:
+                Die('Need a destination file (hint: -f)')
             if os.path.exists(options.file):
                 if not Confirm(
                         'Destination file {0:s} already exists. Proceed?'.format(options.file),
                         options.yes):
                     Die()
+            logging.debug(
+                'Starting a read operation (start={0:d}, end={1:d}, destination={2:s})'.format(
+                    options.start, options.end or -1, options.file))
 
             ftdi_nand.DumpFlashToFile(options.file, start_page=options.start, end_page=options.end)
         elif options.write:
