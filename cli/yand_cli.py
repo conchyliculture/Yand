@@ -159,6 +159,8 @@ class YandCli:
             ftdi_nand.DumpFlashToFile(options.file, start_page=options.start, end_page=options.end)
         elif options.write:
             if not Confirm(
+                    'Reminder: '
+                    'You need to erase the entire flash with -e for this to work as expected\n\n'
                     'About to write the content of "{0:s}" to NAND Flash. Proceed?'.format(
                         options.file), options.yes):
                 Die()
