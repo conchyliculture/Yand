@@ -3,12 +3,16 @@
 import logging
 import os
 import sys
-from tqdm import tqdm
+
+# Make dynamic_ncols True for all progress bars
+from functools import partial
+from tqdm import tqdm as std_tqdm
 
 from yand import errors
 from yand import ftdi_device
 from yand import helpers
 
+tqdm = partial(std_tqdm, dynamic_ncols=True)
 
 class NandInterface:
     """Class to operate on a NAND Flash"""
