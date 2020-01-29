@@ -88,6 +88,10 @@ Device Size: {6:s}
             onfi_data = self.ftdi_device.Read(self.NAND_SIZE_ONFI)
             self._ParseONFIData(onfi_data)
         else:
+            if onfi_result.hex() == '00000000':
+                raise errors.YandException(
+                    'Flash returned "00000000" as self identification\n'
+                    'It is either defective or not connected properly')
             raise errors.YandException(
                 'Warning: Could not read ONFI info. Please provide geometry\n'
                 'Flash returned "{0:s}"'.format(onfi_result.hex()))
