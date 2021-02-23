@@ -9,7 +9,7 @@ Mandatory warning: *I am NOT responsible to any damage done to your data and/or 
 YAND aims at making it easy to copy all data from a NAND flash into a file, or the other way around.
 
 It uses FT2232H chip enabled board to connect to a TSOP48, via a serial over USB conenction.
-For the pinout & schematics, refer to [this diagram](https://github.com/ohjeongwook/DumpFlash/blob/master/schematics.png).
+For the pinout & schematics, refer to [this diagram](https://github.com/ohjeongwook/dumpflash/blob/master/Images/schematics.png).
 
 This was heavily inspired from [https://github.com/ohjeongwook/DumpFlash](https://github.com/ohjeongwook/DumpFlash).
 
