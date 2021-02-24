@@ -24,10 +24,10 @@ class FtdiDevice:
                 self.DEFAULT_USB_VENDOR,
                 self.DEFAULT_USB_DEVICEID,
                 interface=self.DEFAULT_INTERFACE_NUMBER)
-        except OSError:
+        except OSError as oserror:
             raise errors.YandException(
                 'Could not open FTDI device\n'
-                'Check USB connections')
+                'Check USB connections') from oserror
 
         self.ftdi.set_bitmode(0, ftdi.Ftdi.BitMode.MCU)
         self.ftdi.write_data(bytearray([ftdi.Ftdi.DISABLE_CLK_DIV5]))
