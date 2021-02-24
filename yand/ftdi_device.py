@@ -29,7 +29,7 @@ class FtdiDevice:
                 'Could not open FTDI device\n'
                 'Check USB connections')
 
-        self.ftdi.set_bitmode(0, ftdi.Ftdi.BITMODE_MCU)
+        self.ftdi.set_bitmode(0, ftdi.Ftdi.BitMode.MCU)
         self.ftdi.write_data(bytearray([ftdi.Ftdi.DISABLE_CLK_DIV5]))
         self.ftdi.purge_buffers()
         self.ftdi.write_data(bytearray([ftdi.Ftdi.SET_BITS_HIGH, 0x0, 0x1]))
