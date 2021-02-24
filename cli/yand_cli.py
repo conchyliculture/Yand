@@ -129,9 +129,10 @@ class YandCli:
                     int(opt) for opt in options.page_size.split(',')]
                 ftdi_nand.oob_size = oob_size
                 ftdi_nand.page_size = oob_size + page_size
-            except ValueError:
+            except ValueError as value_error:
                 raise errors.YandException(
-                    'Please specify page size as such : "user_data,oob". For example: "2048,128"')
+                    'Please specify page size as such : "user_data,oob". For example: "2048,128"'
+                    ) from value_error
         if options.pages_per_block:
             ftdi_nand.pages_per_block = int(options.pages_per_block)
         if options.number_of_blocks:
